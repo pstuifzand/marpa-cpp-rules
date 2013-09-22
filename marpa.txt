@@ -1,0 +1,18 @@
+
+%%
+# top rule
+rules ::= rule+              {{
+    std::cout << pre_block << "\n";
+    output_rules(rules, names, names_names, code_blocks);
+    std::cout << post_block << "\n";
+}}
+
+rule  ::= lhs bnfop rhs      {{ rules.add(grammar_rule{$0, lrhs[$2], 0}); }}
+rule  ::= lhs bnfop rhs code {{ rules.add(grammar_rule{$0, lrhs[$2], $3}); }}
+lhs   ::= name               {{ $$ = $0; }}
+rhs   ::= names              {{ $$ = lrhs.add(grammar_rhs{$0, 2}); }}
+rhs   ::= name min           {{ $$ = lrhs.add(grammar_rhs{$0, $1}); }}
+rhs   ::= null               {{ $$ = 0 }}
+names ::= name+              {{ std::vector<int> nms{ &$0, &$N }; $$ = names_names.add(nms); }}
+
+%%
