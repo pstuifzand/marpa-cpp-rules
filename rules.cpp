@@ -3,6 +3,7 @@
 #include <iostream>
 #include <iterator>
 #include <fstream>
+#include <iomanip>
 #include "util.h"
 #include "marpa.h"
 #include "symbol_table.h"
@@ -16,6 +17,7 @@ struct grammar_rhs {
     int min; // 0 == *, 1 == +, 2 == names_names_idx
     friend bool operator==(const grammar_rhs& a, const grammar_rhs& b);
 };
+
 bool operator==(const grammar_rhs& a, const grammar_rhs& b) {
     return a.names_names_idx == b.names_names_idx && a.min == b.min;
 }
@@ -47,33 +49,31 @@ void output_rules(
         const indexed_table<std::vector<int>>& names_names,
         const indexed_table<std::string>& code_blocks) {
 
-    /*
-    std::cout << "rules.size() = " << rules.size() << "\n";
-    std::cout << "names.size() = " << names.size() << "\n";
-    std::cout << "names_names.size() = " << names_names.size() << "\n";
-    */
+    using std::cout;
+
+    cout << "\tgrammar g;\n";
+
+    for (auto name : names) {
+        cout << "\tgrammar::symbol_id R_" << std::setw(6) << std::left << name << " = g.new_symbol();\n";
+    }
+
+    cout << "\tusing rule = grammar::rule_id;\n";
 
     for (auto rule : rules) {
-        std::cout << names[rule.lhs] << " ::=";
         if (rule.rhs.min == 2) {
+            cout << "\trule rule_id_" << names[rule.lhs] << "  = g.add_rule(R_" << names[rule.rhs.names_names_idx] << ", {";
             for (auto j : names_names[rule.rhs.names_names_idx]) {
-                std::cout << " " << names[j];
+                cout << "R_" << names[j] << ", ";
             }
+            cout << "});\n";
         }
         else {
-            int j = rule.rhs.names_names_idx;
-            std::cout << " " << names[j];
+            cout << "\trule rule_id_" << names[rule.lhs] << " = g.new_sequence(R_" << names[rule.lhs] << ", R_rule, -1, " << rule.rhs.min << ", 0);\n";
         }
+    }
 
-        if (rule.rhs.min == 0) {
-            std::cout << "*";
-        }
-        else if (rule.rhs.min == 1) {
-            std::cout << "+";
-        }
-
+    for (auto rule : rules) {
         std::string block = code_blocks[rule.code];
-
         replace_variables(block, "$$", "stack[v.result()]");
         replace_variables(block, "$0", "stack[v.arg_0()]");
         replace_variables(block, "$1", "stack[v.arg_0()+1]");
@@ -87,13 +87,11 @@ void output_rules(
         replace_variables(block, "$9", "stack[v.arg_0()+9]");
         replace_variables(block, "$N", "stack[v.arg_n()+1]");
 
-        std::string ss = "$$";
-
-        std::cout << block << "\n";
-
-        std::cout << "\n";
+        cout << "if (rule_id == rule_id_" << names[rule.lhs] << ") {\n";
+        cout << block << "\n";
+        cout << " continue;\n}\n";
     }
-    std::cout << "\n";
+    cout << "\n";
 }
 
 void read_file(const std::string& filename, std::string& input);
@@ -252,14 +250,7 @@ int main()
     while (t.next() >= 0) {
         value v{t};
 
-        v.rule_is_valued(rule_id_rules, 1);
-        v.rule_is_valued(rule_id_rule_0, 1);
-        v.rule_is_valued(rule_id_rule_1, 1);
-        v.rule_is_valued(rule_id_lhs_0, 1);
-        v.rule_is_valued(rule_id_rhs_0, 1);
-        v.rule_is_valued(rule_id_rhs_1, 1);
-        v.rule_is_valued(rule_id_rhs_2, 1);
-        v.rule_is_valued(rule_id_names_0, 1);
+        g.set_valued_rules(v);
 
         std::vector<int> stack;
         stack.resize(128);
@@ -287,8 +278,9 @@ int main()
 
                     /* BEGIN OF RULE SEMANTICS */
                     if (rule == rule_id_rules) {   // list of rules
-                        // done...
+                        std::cout << pre_block << "\n";
                         output_rules(rules, names, names_names, code_blocks);
+                        std::cout << post_block << "\n";
                     }
                     else if (rule == rule_id_rule_0) { // lhs ::= rhs
                         int lhs = stack[v.arg_0()];
@@ -337,8 +329,6 @@ int main()
         END: ;
     }
 
-    std::cout << pre_block << "\n";
-    std::cout << post_block << "\n";
     return 0;
 }
 

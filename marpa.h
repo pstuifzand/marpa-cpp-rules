@@ -8,6 +8,8 @@ extern "C" {
 
 namespace marpa {
 
+class value;
+
 class grammar {
     public:
         typedef int earleme;
@@ -20,22 +22,12 @@ class grammar {
     private:
         typedef Marpa_Grammar handle_type;
     public:
-        grammar() : handle(marpa_g_new(0)) {}
+        grammar();
+        grammar(const grammar& g);
+        grammar& operator=(const grammar& g);
+        ~grammar();
 
-        grammar(const grammar& g) {
-            marpa_g_ref(g.handle);
-            this->handle = g.handle;
-        }
-
-        grammar& operator=(const grammar& g) {
-            marpa_g_ref(g.handle);
-            this->handle = g.handle;
-            return *this;
-        }
-
-        ~grammar() {
-            marpa_g_unref(handle);
-        }
+        void set_valued_rules(value& v);
 
         symbol_id start_symbol() const {
             return marpa_g_start_symbol(handle);
@@ -54,14 +46,19 @@ class grammar {
         }
 
         rule_id add_rule(symbol_id lhs_id, std::initializer_list<symbol_id> rhs) {
-            grammar::rule_id rhs_ids[rhs.size()]; 
+            grammar::symbol_id rhs_ids[rhs.size()]; 
             std::copy(rhs.begin(), rhs.end(), rhs_ids);
-            return new_rule(lhs_id, rhs_ids, rhs.size());
+            rule_id id = new_rule(lhs_id, rhs_ids, rhs.size());
+            rules.push_back(id);
+            return id;
         }
 
         rule_id new_sequence(symbol_id lhs_id, symbol_id rhs_id, symbol_id separator_id, int min, int flags) {
-            return marpa_g_sequence_new(handle, lhs_id, rhs_id, separator_id, min, flags);
+            rule_id id = marpa_g_sequence_new(handle, lhs_id, rhs_id, separator_id, min, flags);
+            rules.push_back(id);
+            return id;
         }
+
 
         int precompute() {
             return marpa_g_precompute(handle);
@@ -74,6 +71,7 @@ class grammar {
         handle_type internal_handle() { return handle; }
     private:
         handle_type handle;
+        std::vector<rule_id> rules;
 };
 
 class recognizer {
