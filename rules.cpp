@@ -107,6 +107,12 @@ I match(I first, I last, I s_first, I s_last) {
     return first;
 }
 
+template <typename I, typename P>
+// requires ForwardIterator(I)
+I skip(I first, I last, P pred) {
+    return std::find_if_not(first, last, pred);
+}
+
 int main()
 {
     grammar g;
@@ -153,8 +159,6 @@ int main()
 
     read_file("marpa.txt", input);
 
-    std::string bnf_op{"::="};
-    std::string null{"null"};
     std::string code_start{"{{"};
     std::string code_end{"}}"};
 
@@ -165,6 +169,7 @@ int main()
     std::string sep = "%%";
     auto sep_pos = std::search(input.begin(), input.end(), sep.begin(), sep.end());
     if (sep_pos == input.end()) {
+        // missing %%
     }
 
     std::string pre_block{input.begin(), sep_pos };
@@ -175,35 +180,30 @@ int main()
         //missing %%
     }
 
-    std::string post_block{sep_pos+2, input.end() };
+    std::string post_block{ sep_pos + 2, input.end() };
 
     std::vector<std::tuple<std::string, grammar::symbol_id, int>> tokens{
-        std::make_tuple("::=", T_bnfop, 0),
+        std::make_tuple("::=",  T_bnfop, 0),
         std::make_tuple("null", T_null, 0),
-        std::make_tuple("*", T_min, 0),
-        std::make_tuple("+", T_min, 1),
+        std::make_tuple("*",    T_min, 0),
+        std::make_tuple("+",    T_min, 1),
     };
 
     while (it != sep_pos) {
 
-        // skip ws
-        if (isspace(*it)) {
-            it++;
+        it = skip(it, sep_pos, isspace);
+
+        if (*it == '#') {
+            it = std::find(it, sep_pos, '\n');
             continue;
         }
 
         if (isalpha(*it)) {
             auto begin = it;
-            it = std::find_if_not(it, sep_pos, isalpha);
+            it = std::find_if_not(begin, sep_pos, isalpha);
             std::string id(begin, it);
             int idx = names.add(id);
             r.read(T_name, idx, 1);
-            continue;
-        }
-        if (*it == '#') {
-            while (it != sep_pos && *it != '\n') {
-                it++;
-            }
             continue;
         }
 
@@ -231,7 +231,11 @@ int main()
             continue;
         }
 
-        std::cout << "Unknown tokens starting here\n" << std::string(it, sep_pos) << "\n";
+        if (it == sep_pos) {
+            break;
+        }
+
+        std::cout << "Unknown tokens starting here\n[" << std::string(it, sep_pos) << "]\n";
         exit(1);
     }
 

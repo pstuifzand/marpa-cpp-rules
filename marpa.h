@@ -121,10 +121,12 @@ class recognizer {
             //std::cout << sym_id << " " << value << " " << length << "\n";
             return earleme_complete();
         }
+
     private:
         recognizer& operator=(const recognizer&);
         recognizer(const recognizer&);
 };
+
 
 class bocage {
     private:
