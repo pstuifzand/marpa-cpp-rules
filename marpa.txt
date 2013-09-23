@@ -8,10 +8,9 @@
 #include "marpa.h"
 #include "symbol_table.h"
 #include "error.h"
+#include "read_file.h"
 
 using namespace marpa;
-
-void read_file(const std::string& filename, std::string& input);
 
 struct grammar_rhs {
     int names_names_idx;
@@ -39,23 +38,9 @@ indexed_table<grammar_rule>     rules;
 indexed_table<grammar_rhs>      lrhs;
 indexed_table<std::vector<int>> names_names;
 
-template <typename I>
-I match(I first, I last, I s_first, I s_last) {
-    std::pair<I,I> p = std::mismatch(first, last, s_first);
-    if (p.second == s_last) {
-        return p.first;
-    }
-    return first;
-}
-
-template <typename I, typename P>
-// requires ForwardIterator(I)
-I skip(I first, I last, P pred) {
-    return std::find_if_not(first, last, pred);
-}
-
 void replace_variables(std::string& block, const std::string& var, const std::string& with) {
     auto it = std::search(block.begin(), block.end(), var.begin(), var.end());
+
     while (it != block.end()) {
         auto last = it;
         std::advance(last, std::distance(var.begin(),var.end()));
@@ -73,11 +58,6 @@ void output_rules(
     using std::cout;
 
     cout << "\tusing rule = grammar::rule_id;\n";
-
-    /*
-        std::stable_sort(rules.begin(), rules.end(),
-                [](const grammar_rule& a, const grammar_rule& b) { return a.lhs < b.lhs; });
-    */
 
     int last_lhs   = -1;
     int last_count = 0;
@@ -205,7 +185,10 @@ names ::= name+              {{ std::vector<int> nms{ &$0, &$N }; $$ = names_nam
 %%
 
 int main(int argc, char** argv) {
+
     code_blocks.add(""); // empty code block
+    lrhs.add(grammar_rhs{});
+
     grammar g;
     create_grammar(g);
 
@@ -242,19 +225,20 @@ int main(int argc, char** argv) {
         std::make_tuple("+",    R_min,   1),
     };
 
-    while (it != sep_pos) {
+    auto last = sep_pos;
 
-        it = skip(it, sep_pos, isspace);
+    while (it != last) {
+
+        it = skip(it, last, isspace);
 
         if (*it == '#') {
-            it = std::find(it, sep_pos, '\n');
-            if (it != sep_pos) ++it;
+            it = discard_until_after(it, last, '\n');
             continue;
         }
 
         if (isalpha(*it)) {
             auto begin = it;
-            it = std::find_if_not(begin, sep_pos, isalpha);
+            it = skip(begin, last, isalpha);
             std::string id(begin, it);
             int idx = names.add(id);
             r.read(R_name, idx, 1);
@@ -263,7 +247,7 @@ int main(int argc, char** argv) {
 
         bool found = false;
         for (auto t : tokens) {
-            auto new_it = match(it, sep_pos, std::get<0>(t).begin(), std::get<0>(t).end());
+            auto new_it = match(it, last, std::get<0>(t).begin(), std::get<0>(t).end());
             if (new_it != it) {
                 r.read(std::get<1>(t), std::get<2>(t), 1);
                 it = new_it;
@@ -273,10 +257,10 @@ int main(int argc, char** argv) {
         }
         if (found) continue;
 
-        auto p = std::mismatch(it, sep_pos, code_start.begin());
+        auto p = std::mismatch(it, last, code_start.begin());
         if (p.second == code_start.end()) {
-            auto end = std::search(p.first, sep_pos, code_end.begin(), code_end.end());
-            if (end == sep_pos) {
+            auto end = std::search(p.first, last, code_end.begin(), code_end.end());
+            if (end == last) {
                 // error
             }
             std::string code_block(p.first, end);
@@ -285,11 +269,11 @@ int main(int argc, char** argv) {
             continue;
         }
 
-        if (it == sep_pos) {
+        if (it == last) {
             break;
         }
 
-        std::cout << "Unknown tokens starting here\n[" << std::string(it, sep_pos) << "]\n";
+        std::cout << "Unknown tokens starting here\n[" << std::string(it, last) << "]\n";
         exit(1);
     }
 
@@ -318,7 +302,6 @@ int main(int argc, char** argv) {
             switch (type) {
                 case MARPA_STEP_INITIAL:
                     stack.resize(1);
-                    lrhs.add(grammar_rhs{});
                     break;
                 case MARPA_STEP_TOKEN: {
                     stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
@@ -326,7 +309,6 @@ int main(int argc, char** argv) {
                     break;
                 }
                 case MARPA_STEP_RULE: {
-                    grammar::rule_id rule = v.rule();
                     stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
 
                     /* BEGIN OF RULE SEMANTICS */

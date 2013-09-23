@@ -8,6 +8,7 @@
 #include "marpa.h"
 #include "symbol_table.h"
 #include "error.h"
+#include "read_file.h"
 
 using namespace marpa;
 
@@ -151,23 +152,6 @@ void output_rules(
     }
     cout << "\n";
     cout << "}\n";
-}
-
-void read_file(const std::string& filename, std::string& input);
-
-template <typename I>
-I match(I first, I last, I s_first, I s_last) {
-    std::pair<I,I> p = std::mismatch(first, last, s_first);
-    if (p.second == s_last) {
-        return p.first;
-    }
-    return first;
-}
-
-template <typename I, typename P>
-// requires ForwardIterator(I)
-I skip(I first, I last, P pred) {
-    return std::find_if_not(first, last, pred);
 }
 
 int main(int argc, char** argv)
