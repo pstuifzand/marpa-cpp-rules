@@ -53,11 +53,6 @@ void output_rules(
 
     cout << "\tusing rule = grammar::rule_id;\n";
 
-    /*
-        std::stable_sort(rules.begin(), rules.end(),
-                [](const grammar_rule& a, const grammar_rule& b) { return a.lhs < b.lhs; });
-    */
-
     int last_lhs   = -1;
     int last_count = 0;
 
@@ -175,7 +170,7 @@ I skip(I first, I last, P pred) {
     return std::find_if_not(first, last, pred);
 }
 
-int main()
+int main(int argc, char** argv)
 {
     grammar g;
 
@@ -219,7 +214,7 @@ int main()
     /* READ TOKENS */
     std::string input;
 
-    read_file("marpa.txt", input);
+    read_file(argv[1], input);
 
     std::string code_start{"{{"};
     std::string code_end{"}}"};

@@ -24,13 +24,13 @@ factor ::= number                 {{ $$ = $0; }}
 
 %%
 
-int main() {
+int main(int argc, char** argv) {
     grammar g;
     create_grammar(g);
 
     recognizer r(g);
 
-    std::string input = "42 * 1 + 7 - 10";
+    std::string input = argv[1];
 
     auto it = input.begin();
 
