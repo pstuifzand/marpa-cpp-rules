@@ -7,8 +7,7 @@
 #include "util.h"
 #include "marpa.h"
 #include "symbol_table.h"
-
-extern const char* marpa_errors[92];
+#include "error.h"
 
 using namespace marpa;
 
@@ -26,6 +25,7 @@ struct grammar_rule {
     int lhs;
     grammar_rhs rhs;
     int code;
+    int lhs_count;
 
     friend bool operator==(const grammar_rule& a, const grammar_rule& b);
 };
@@ -44,34 +44,90 @@ void replace_variables(std::string& block, const std::string& var, const std::st
 }
 
 void output_rules(
-        const indexed_table<grammar_rule>& rules,
-        const indexed_table<std::string>& names,
-        const indexed_table<std::vector<int>>& names_names,
-        const indexed_table<std::string>& code_blocks) {
+    indexed_table<grammar_rule>& rules,
+    const indexed_table<std::string>& names,
+    const indexed_table<std::vector<int>>& names_names,
+    const indexed_table<std::string>& code_blocks) {
 
     using std::cout;
 
-    cout << "\tgrammar g;\n";
+    cout << "\tusing rule = grammar::rule_id;\n";
 
-    for (auto name : names) {
-        cout << "\tgrammar::symbol_id R_" << std::setw(6) << std::left << name << " = g.new_symbol();\n";
+    /*
+        std::stable_sort(rules.begin(), rules.end(),
+                [](const grammar_rule& a, const grammar_rule& b) { return a.lhs < b.lhs; });
+    */
+
+    int last_lhs   = -1;
+    int last_count = 0;
+
+    for (auto& rule : rules) {
+        if (rule.lhs == last_lhs) {
+            ++last_count;
+            rule.lhs_count = last_count;
+        }
+        else {
+            last_lhs = rule.lhs;
+            last_count = 0;
+            rule.lhs_count = last_count;
+        }
+    }
+    
+    for (auto rule : rules) {
+        if (rule.rhs.min == 2) {
+            cout << "\trule rule_id_" << names[rule.lhs] << "_" << rule.lhs_count << ";\n";
+        }
+        else {
+            cout << "\trule rule_id_" << names[rule.lhs] << ";\n";
+        }
     }
 
-    cout << "\tusing rule = grammar::rule_id;\n";
+    for (auto name : names) {
+        cout << "\tgrammar::symbol_id R_" << std::setw(6) << std::left << name << ";\n";
+    }
+    cout << "\n\n";
+
+    // generate grammar
+    cout << "void create_grammar(grammar& g) {\n";
+    for (auto name : names) {
+        cout << "\tR_" << std::setw(6) << std::left << name << " = g.new_symbol();\n";
+    }
 
     for (auto rule : rules) {
         if (rule.rhs.min == 2) {
-            cout << "\trule rule_id_" << names[rule.lhs] << "  = g.add_rule(R_" << names[rule.rhs.names_names_idx] << ", {";
+            cout << "\trule_id_" << names[rule.lhs] << "_" << rule.lhs_count << "  = g.add_rule(R_" << names[rule.lhs] << ", {";
             for (auto j : names_names[rule.rhs.names_names_idx]) {
                 cout << "R_" << names[j] << ", ";
             }
             cout << "});\n";
         }
         else {
-            cout << "\trule rule_id_" << names[rule.lhs] << " = g.new_sequence(R_" << names[rule.lhs] << ", R_rule, -1, " << rule.rhs.min << ", 0);\n";
+            cout << "\trule_id_" << names[rule.lhs] << " = g.new_sequence(R_" << names[rule.lhs] << ", R_" << names[rule.rhs.names_names_idx] << ", -1, " << rule.rhs.min << ", 0);\n";
         }
     }
+    cout << "\tg.start_symbol(R_" << names[0] << ");\n";
 
+    const char* lines[] = {
+        "if (g.precompute() < 0) {\t",
+        "    std::cout << \"precompute() failed\\n\";\n",
+        "    std::cout << marpa_errors[g.error()] << \"\\n\";\n",
+        "    std::cout << \"\\n\";\n",
+        "    exit(1);\t",
+        "}\n",
+    };
+
+    for (const char* line : lines) {
+        cout << line;
+    }
+
+    cout << "}\n";
+
+    cout << "void evaluate_rules(grammar& g, recognizer& r, value& v, std::vector<int>& stack) {\n";
+    cout << "\tusing rule = grammar::rule_id;\n";
+    cout << "\trule rule_id = v.rule();\n";
+
+    // generate evaluators
+    int not_first = 0;
     for (auto rule : rules) {
         std::string block = code_blocks[rule.code];
         replace_variables(block, "$$", "stack[v.result()]");
@@ -87,11 +143,19 @@ void output_rules(
         replace_variables(block, "$9", "stack[v.arg_0()+9]");
         replace_variables(block, "$N", "stack[v.arg_n()+1]");
 
-        cout << "if (rule_id == rule_id_" << names[rule.lhs] << ") {\n";
+        if (not_first) cout << "\telse ";
+
+        cout << "\tif (rule_id == rule_id_" << names[rule.lhs];
+        if (rule.rhs.min == 2) {
+            cout << "_" << rule.lhs_count;
+        }
+        cout << ") {\n";
         cout << block << "\n";
-        cout << " continue;\n}\n";
+        cout << "\t}\n";
+        not_first++;
     }
     cout << "\n";
+    cout << "}\n";
 }
 
 void read_file(const std::string& filename, std::string& input);
@@ -155,7 +219,7 @@ int main()
     /* READ TOKENS */
     std::string input;
 
-    read_file("marpa.txt", input);
+    read_file("test.txt", input);
 
     std::string code_start{"{{"};
     std::string code_end{"}}"};
@@ -182,9 +246,9 @@ int main()
 
     std::vector<std::tuple<std::string, grammar::symbol_id, int>> tokens{
         std::make_tuple("::=",  T_bnfop, 0),
-        std::make_tuple("null", T_null, 0),
-        std::make_tuple("*",    T_min, 0),
-        std::make_tuple("+",    T_min, 1),
+        std::make_tuple("null", T_null,  0),
+        std::make_tuple("*",    T_min,   0),
+        std::make_tuple("+",    T_min,   1),
     };
 
     while (it != sep_pos) {
@@ -193,6 +257,7 @@ int main()
 
         if (*it == '#') {
             it = std::find(it, sep_pos, '\n');
+            if (it != sep_pos) ++it;
             continue;
         }
 
@@ -249,7 +314,6 @@ int main()
     /* Evaluate trees */
     while (t.next() >= 0) {
         value v{t};
-
         g.set_valued_rules(v);
 
         std::vector<int> stack;

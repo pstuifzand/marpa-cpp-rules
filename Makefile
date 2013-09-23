@@ -1,9 +1,15 @@
 
-all: rules
+all: rules testmarpa
+
+test.cpp: rules test.txt
+	./rules > test.cpp
+
+testmarpa: test.cpp marpa.cpp errors.cpp
+	gcc marpa.cpp test.cpp errors.cpp libmarpa.a -o testmarpa -lstdc++ -std=c++11 -g
 
 clean:
 	rm -f errors.o rules.o read_file.o
-	rm -f rules
+	rm -f rules testmarpa
 
 read_file.o: read_file.cpp
 	gcc -c -o $@ $< -std=c++11 -Wall -g -lstdc++

@@ -18,6 +18,10 @@ class indexed_table {
         const T& operator[](int idx) const {
             return symbols[idx];
         }
+
+        iterator begin() { return symbols.begin(); }
+        iterator end() { return symbols.end(); }
+
         const_iterator begin() const { return symbols.begin(); }
         const_iterator end() const { return symbols.end(); }
 
