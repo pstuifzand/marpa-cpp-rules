@@ -122,9 +122,10 @@ void output_rules(
         cout << line;
     }
 
-    cout << "}\n";
+    cout << "}\n\n";
 
-    cout << "void evaluate_rules(grammar& g, recognizer& r, value& v, std::vector<int>& stack) {\n";
+    cout << "template <typename T>\n";
+    cout << "void evaluate_rules(grammar& g, recognizer& r, value& v, std::vector<T>& stack) {\n";
     cout << "\tusing rule = grammar::rule_id;\n";
     cout << "\trule rule_id = v.rule();\n";
 
@@ -152,6 +153,7 @@ void output_rules(
             cout << "_" << rule.lhs_count;
         }
         cout << ") {\n";
+        //cout << "std::cout << \"" << names[rule.lhs] << "t\\n\";" << "\n";
         cout << block << "\n";
         cout << "\t}\n";
         not_first++;
