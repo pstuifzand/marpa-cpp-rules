@@ -219,7 +219,7 @@ int main()
     /* READ TOKENS */
     std::string input;
 
-    read_file("test.txt", input);
+    read_file("marpa.txt", input);
 
     std::string code_start{"{{"};
     std::string code_end{"}}"};

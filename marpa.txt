@@ -11,6 +11,8 @@
 
 using namespace marpa;
 
+void read_file(const std::string& filename, std::string& input);
+
 struct grammar_rhs {
     int names_names_idx;
     int min; // 0 == *, 1 == +, 2 == names_names_idx
@@ -37,12 +39,159 @@ indexed_table<grammar_rule>     rules;
 indexed_table<grammar_rhs>      lrhs;
 indexed_table<std::vector<int>> names_names;
 
+template <typename I>
+I match(I first, I last, I s_first, I s_last) {
+    std::pair<I,I> p = std::mismatch(first, last, s_first);
+    if (p.second == s_last) {
+        return p.first;
+    }
+    return first;
+}
+
+template <typename I, typename P>
+// requires ForwardIterator(I)
+I skip(I first, I last, P pred) {
+    return std::find_if_not(first, last, pred);
+}
+
+void replace_variables(std::string& block, const std::string& var, const std::string& with) {
+    auto it = std::search(block.begin(), block.end(), var.begin(), var.end());
+    while (it != block.end()) {
+        auto last = it;
+        std::advance(last, std::distance(var.begin(),var.end()));
+        block.replace(it, last, with);
+        it = std::search(block.begin(), block.end(), var.begin(), var.end());
+    }
+}
+
+void output_rules(
+    indexed_table<grammar_rule>& rules,
+    const indexed_table<std::string>& names,
+    const indexed_table<std::vector<int>>& names_names,
+    const indexed_table<std::string>& code_blocks) {
+
+    using std::cout;
+
+    cout << "\tusing rule = grammar::rule_id;\n";
+
+    /*
+        std::stable_sort(rules.begin(), rules.end(),
+                [](const grammar_rule& a, const grammar_rule& b) { return a.lhs < b.lhs; });
+    */
+
+    int last_lhs   = -1;
+    int last_count = 0;
+
+    for (auto& rule : rules) {
+        if (rule.lhs == last_lhs) {
+            ++last_count;
+            rule.lhs_count = last_count;
+        }
+        else {
+            last_lhs = rule.lhs;
+            last_count = 0;
+            rule.lhs_count = last_count;
+        }
+    }
+    
+    for (auto rule : rules) {
+        if (rule.rhs.min == 2) {
+            cout << "\trule rule_id_" << names[rule.lhs] << "_" << rule.lhs_count << ";\n";
+        }
+        else {
+            cout << "\trule rule_id_" << names[rule.lhs] << ";\n";
+        }
+    }
+
+    for (auto name : names) {
+        cout << "\tgrammar::symbol_id R_" << std::setw(6) << std::left << name << ";\n";
+    }
+    cout << "\n\n";
+
+    // generate grammar
+    cout << "void create_grammar(grammar& g) {\n";
+    for (auto name : names) {
+        cout << "\tR_" << std::setw(6) << std::left << name << " = g.new_symbol();\n";
+    }
+
+    for (auto rule : rules) {
+        if (rule.rhs.min == 2) {
+            cout << "\trule_id_" << names[rule.lhs] << "_" << rule.lhs_count << "  = g.add_rule(R_" << names[rule.lhs] << ", {";
+            for (auto j : names_names[rule.rhs.names_names_idx]) {
+                cout << "R_" << names[j] << ", ";
+            }
+            cout << "});\n";
+        }
+        else {
+            cout << "\trule_id_" << names[rule.lhs] << " = g.new_sequence(R_" << names[rule.lhs] << ", R_" << names[rule.rhs.names_names_idx] << ", -1, " << rule.rhs.min << ", 0);\n";
+        }
+    }
+    cout << "\tg.start_symbol(R_" << names[0] << ");\n";
+
+    const char* lines[] = {
+        "if (g.precompute() < 0) {\t",
+        "    std::cout << \"precompute() failed\\n\";\n",
+        "    std::cout << marpa_errors[g.error()] << \"\\n\";\n",
+        "    std::cout << \"\\n\";\n",
+        "    exit(1);\t",
+        "}\n",
+    };
+
+    for (const char* line : lines) {
+        cout << line;
+    }
+
+    cout << "}\n";
+
+    cout << "void evaluate_rules(grammar& g, recognizer& r, value& v, std::vector<int>& stack) {\n";
+    cout << "\tusing rule = grammar::rule_id;\n";
+    cout << "\trule rule_id = v.rule();\n";
+
+    // generate evaluators
+    int not_first = 0;
+    for (auto rule : rules) {
+        std::string block = code_blocks[rule.code];
+        replace_variables(block, "$$", "stack[v.result()]");
+        replace_variables(block, "$0", "stack[v.arg_0()]");
+        replace_variables(block, "$1", "stack[v.arg_0()+1]");
+        replace_variables(block, "$2", "stack[v.arg_0()+2]");
+        replace_variables(block, "$3", "stack[v.arg_0()+3]");
+        replace_variables(block, "$4", "stack[v.arg_0()+4]");
+        replace_variables(block, "$5", "stack[v.arg_0()+5]");
+        replace_variables(block, "$6", "stack[v.arg_0()+6]");
+        replace_variables(block, "$7", "stack[v.arg_0()+7]");
+        replace_variables(block, "$8", "stack[v.arg_0()+8]");
+        replace_variables(block, "$9", "stack[v.arg_0()+9]");
+        replace_variables(block, "$N", "stack[v.arg_n()+1]");
+
+        if (not_first) cout << "\telse ";
+
+        cout << "\tif (rule_id == rule_id_" << names[rule.lhs];
+        if (rule.rhs.min == 2) {
+            cout << "_" << rule.lhs_count;
+        }
+        cout << ") {\n";
+        cout << block << "\n";
+        cout << "\t}\n";
+        not_first++;
+    }
+    cout << "\n";
+    cout << "}\n";
+}
+
+indexed_table<std::string> names;
+indexed_table<std::string> code_blocks;
+
+std::string pre_block;
+std::string post_block;
 
 %%
 
 # top rule
 rules ::= rule+              {{
-    //output_rules(rules, names, names_names, code_blocks);
+    std::cout << pre_block;
+    output_rules(rules, names, names_names, code_blocks);
+    std::cout << post_block;
 }}
 
 rule  ::= lhs bnfop rhs      {{ rules.add(grammar_rule{$0, lrhs[$2], 0}); }}
@@ -56,10 +205,95 @@ names ::= name+              {{ std::vector<int> nms{ &$0, &$N }; $$ = names_nam
 %%
 
 int main() {
+    code_blocks.add(""); // empty code block
     grammar g;
     create_grammar(g);
 
     recognizer r(g);
+
+    std::string input;
+
+    read_file("marpa.txt", input);
+
+    std::string code_start{"{{"};
+    std::string code_end{"}}"};
+
+    std::string sep = "%%";
+    auto sep_pos = std::search(input.begin(), input.end(), sep.begin(), sep.end());
+    if (sep_pos == input.end()) {
+        // missing %%
+    }
+
+    pre_block.assign(input.begin(), sep_pos);
+
+    std::string::iterator it = sep_pos+2;
+
+    sep_pos = std::search(it, input.end(), sep.begin(), sep.end());
+    if (sep_pos == input.end()) {
+        //missing %%
+    }
+
+    post_block.assign(sep_pos + 2, input.end());
+
+    std::vector<std::tuple<std::string, grammar::symbol_id, int>> tokens{
+        std::make_tuple("::=",  R_bnfop, 0),
+        std::make_tuple("null", R_null,  0),
+        std::make_tuple("*",    R_min,   0),
+        std::make_tuple("+",    R_min,   1),
+    };
+
+    while (it != sep_pos) {
+
+        it = skip(it, sep_pos, isspace);
+
+        if (*it == '#') {
+            it = std::find(it, sep_pos, '\n');
+            if (it != sep_pos) ++it;
+            continue;
+        }
+
+        if (isalpha(*it)) {
+            auto begin = it;
+            it = std::find_if_not(begin, sep_pos, isalpha);
+            std::string id(begin, it);
+            int idx = names.add(id);
+            r.read(R_name, idx, 1);
+            continue;
+        }
+
+        bool found = false;
+        for (auto t : tokens) {
+            auto new_it = match(it, sep_pos, std::get<0>(t).begin(), std::get<0>(t).end());
+            if (new_it != it) {
+                r.read(std::get<1>(t), std::get<2>(t), 1);
+                it = new_it;
+                found = true;
+                break;
+            }
+        }
+        if (found) continue;
+
+        auto p = std::mismatch(it, sep_pos, code_start.begin());
+        if (p.second == code_start.end()) {
+            auto end = std::search(p.first, sep_pos, code_end.begin(), code_end.end());
+            if (end == sep_pos) {
+                // error
+            }
+            std::string code_block(p.first, end);
+            r.read(R_code, code_blocks.add(code_block), 1);
+            it = end + 2;
+            continue;
+        }
+
+        if (it == sep_pos) {
+            break;
+        }
+
+        std::cout << "Unknown tokens starting here\n[" << std::string(it, sep_pos) << "]\n";
+        exit(1);
+    }
+
+
 
     bocage b{r, r.latest_earley_set()};
     if (g.error() != MARPA_ERR_NONE) {
