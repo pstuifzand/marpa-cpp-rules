@@ -15,6 +15,7 @@ using namespace marpa;
 struct grammar_rhs {
     int names_names_idx;
     int min; // 0 == *, 1 == +, 2 == names_names_idx
+    int sep;
     friend bool operator==(const grammar_rhs& a, const grammar_rhs& b);
 };
 
@@ -98,7 +99,7 @@ void output_rules(
             cout << "});\n";
         }
         else {
-            cout << "\trule_id_" << names[rule.lhs] << " = g.new_sequence(R_" << names[rule.lhs] << ", R_" << names[rule.rhs.names_names_idx] << ", -1, " << rule.rhs.min << ", 0);\n";
+            cout << "\trule_id_" << names[rule.lhs] << " = g.new_sequence(R_" << names[rule.lhs] << ", R_" << names[rule.rhs.names_names_idx] << ", " << rule.rhs.sep << ", " << rule.rhs.min << ", 0);\n";
         }
     }
     cout << "\tg.start_symbol(R_" << names[0] << ");\n";
@@ -182,6 +183,7 @@ int main(int argc, char** argv)
     rule rule_id_rhs_0   = g.add_rule(R_rhs,  { R_names });
     rule rule_id_rhs_1   = g.add_rule(R_rhs,  { T_name, T_min });
     rule rule_id_rhs_2   = g.add_rule(R_rhs,  { T_null });
+    rule rule_id_rhs_3   = g.add_rule(R_rhs,  { T_name, T_min, T_name });
     rule rule_id_names_0 = g.new_sequence(R_names, T_name, -1, 1, 0);
 
     /* END OF GRAMMAR */
@@ -343,15 +345,21 @@ int main(int argc, char** argv)
                     }
                     else if (rule == rule_id_rhs_0) {  // names
                         int n = stack[v.arg_0()];
-                        stack[v.result()] = lrhs.add(grammar_rhs{n, 2});
+                        stack[v.result()] = lrhs.add(grammar_rhs{n, 2, -1 });
                     }
                     else if (rule == rule_id_rhs_1) {  // name (*|+)
                         int n = stack[v.arg_0()];
                         int min = stack[v.arg_0()+1];
-                        stack[v.result()] = lrhs.add(grammar_rhs{n, min});
+                        stack[v.result()] = lrhs.add(grammar_rhs{n, min, -1 });
                     }
                     else if (rule == rule_id_rhs_2) {  // null
                         stack[v.result()] = 0;
+                    }
+                    else if (rule == rule_id_rhs_3) {  // name (*|+) sep
+                        int n = stack[v.arg_0()];
+                        int min = stack[v.arg_0()+1];
+                        int sep = stack[v.arg_0()+2];
+                        stack[v.result()] = lrhs.add(grammar_rhs{n, min, sep});
                     }
                     else if (rule == rule_id_names_0) { // sequence of names
                         std::vector<int> nms{&stack[v.arg_0()], &stack[v.arg_n() + 1]};
