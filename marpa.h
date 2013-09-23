@@ -59,6 +59,9 @@ class grammar {
             return id;
         }
 
+        void symbol_is_terminal(symbol_id sym_id, int value) {
+            marpa_g_symbol_is_terminal_set(handle, sym_id, value);
+        }
 
         int precompute() {
             return marpa_g_precompute(handle);
@@ -182,12 +185,15 @@ class value {
 
         step_type step() { return marpa_v_step(handle); }
         void rule_is_valued(grammar::rule_id rule, int value) { marpa_v_rule_is_valued_set(handle, rule, value); }
+        void symbol_is_valued(grammar::symbol_id rule, int value) { marpa_v_symbol_is_valued_set(handle, rule, value); }
 
         int result() { return marpa_v_result(handle); }
         int arg_0() { return marpa_v_arg_0(handle); }
         int arg_n() { return marpa_v_arg_n(handle); }
         int token_value() { return marpa_v_token_value(handle); }
         int rule() { return marpa_v_rule(handle); }
+        grammar::symbol_id symbol() { return marpa_v_symbol(handle); }
+        grammar::symbol_id token() { return marpa_v_token(handle); }
     private:
         value& operator=(const value&);
         value(const value&);
