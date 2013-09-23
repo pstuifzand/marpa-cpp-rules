@@ -1,0 +1,187 @@
+#include <vector>
+#include <algorithm>
+#include <iostream>
+#include <iterator>
+#include <fstream>
+#include <iomanip>
+#include <memory>
+#include "util.h"
+#include "marpa.h"
+#include "symbol_table.h"
+#include "error.h"
+
+using namespace marpa;
+
+std::vector<int> numbers;
+
+class node {
+    public:
+        virtual ~node() {}
+        virtual void show() = 0;
+    private:
+};
+
+class id : public node {
+    public:
+        virtual ~id() {}
+        virtual void show() { std::cout << "x"; }
+};
+
+class op : public node {
+    public:
+        op(std::shared_ptr<node> left, std::shared_ptr<node> right) : left(left), right(right) {}
+        virtual ~op() {}
+        virtual void show() {
+            left->show();
+            std::cout << " " << oper() << " ";
+            right->show();
+        }
+        virtual std::string oper() = 0;
+    private:
+        std::shared_ptr<node> left;
+        std::shared_ptr<node> right;
+};
+
+class add : public op {
+    public:
+        add(std::shared_ptr<node> left, std::shared_ptr<node> right) : op(left, right) {}
+        virtual ~add() {}
+        virtual std::string oper() { return "+"; }
+};
+
+class mul : public op {
+    public:
+        mul(std::shared_ptr<node> left, std::shared_ptr<node> right) : op(left, right) {}
+        virtual ~mul() {}
+        virtual std::string oper() { return "*"; }
+};
+
+class power : public op {
+    public:
+        power(std::shared_ptr<node> left, std::shared_ptr<node> right) : op(left, right) {}
+        virtual ~power() {}
+        virtual std::string oper() { return "^"; }
+};
+
+class number : public node {
+    public:
+        number(int n) : n(n) {}
+        virtual ~number() {}
+        virtual void show() { std::cout << n; }
+    private:
+        int n;
+};
+
+indexed_table<std::shared_ptr<node>> nodes;
+
+%%
+
+expr   ::= term                   {{ $$ = $0; }}
+
+term   ::= term ADD term          {{ $$ = std::make_shared<add>($0, $2); }}
+term   ::= factor                 {{ $$ = $0; }}
+
+factor ::= factor MUL factor      {{ $$ = std::make_shared<mul>($0, $2); }}
+factor ::= number                 {{ $$ = $0; }}
+factor ::= id POWER number        {{ $$ = std::make_shared<power>($0, $2); }}
+factor ::= id                     {{ $$ = $0; }}
+
+id     ::= X                      {{ $$ = std::make_shared<id>(); }}
+
+%%
+
+int main(int argc, char** argv) {
+    nodes.add(std::make_shared<number>(0));
+    grammar g;
+
+    create_grammar(g);
+
+    recognizer r(g);
+
+    std::string input = argv[1];
+
+    auto it = input.begin();
+
+    while (it != input.end()) {
+        if (isspace(*it)) {
+            it++;
+        }
+        else if (isdigit(*it)) {
+            auto n = parse_digit(it, input.end(), 10, '0');
+            int idx = nodes.add(std::make_shared<number>(n.second));
+            r.read(R_number, idx, 1);
+            it = n.first;
+        }
+        else if (*it == '+') {
+            r.read(R_ADD, 0, 1);
+            it++;
+        }
+        else if (*it == '*') {
+            r.read(R_MUL, 0, 1);
+            it++;
+        }
+        else if (*it == '^') {
+            r.read(R_POWER, 0, 1);
+            it++;
+        }
+        else if (*it == 'x') {
+            r.read(R_X, 0, 1);
+            it++;
+        }
+    }
+
+    bocage b{r, r.latest_earley_set()};
+    if (g.error() != MARPA_ERR_NONE) {
+        std::cout << marpa_errors[g.error()] << "\n";
+        return 1;
+    }
+
+    order o{b};
+    tree t{o};
+
+    /* Evaluate trees */
+    while (t.next() >= 0) {
+        value v{t};
+        g.set_valued_rules(v);
+        v.symbol_is_valued(R_X, 1);
+        v.symbol_is_valued(R_number, 1);
+
+        std::vector<std::shared_ptr<node>> stack;
+        stack.resize(128);
+
+        for (;;) {
+            value::step_type type = v.step();
+
+            switch (type) {
+                case MARPA_STEP_INITIAL:
+                    stack.resize(1);
+                    break;
+                case MARPA_STEP_TOKEN: {
+                    stack.resize(std::max((int)v.result()+1, (int)stack.size()));
+                    stack[v.result()] = nodes[v.token_value()];
+                    break;
+                }
+                case MARPA_STEP_RULE: {
+                    grammar::rule_id rule = v.rule();
+                    stack.resize(std::max((int)v.result()+1, (int)stack.size()));
+                    /* BEGIN OF RULE SEMANTICS */
+                    evaluate_rules(g, r, v, stack);
+                    /* END OF RULE SEMANTICS */
+                    break;
+                }
+                case MARPA_STEP_NULLING_SYMBOL: {
+                    int res    = v.result();
+                    grammar::symbol_id sym = v.symbol();
+                    //stack[res] = v.token(); 
+                    break;
+                }
+                case MARPA_STEP_INACTIVE:
+                    stack[0]->show();
+                    std::cout << "\n";
+                    goto END;
+            }
+        }
+        END: ;
+    }
+}
+
