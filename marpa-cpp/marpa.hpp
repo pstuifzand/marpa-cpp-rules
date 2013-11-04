@@ -22,12 +22,28 @@ class grammar {
     private:
         typedef Marpa_Grammar handle_type;
     public:
-        grammar();
-        grammar(const grammar& g);
-        grammar& operator=(const grammar& g);
-        ~grammar();
+        grammar() : handle(marpa_g_new(0)) {}
+        grammar(const grammar& g) {
+            marpa_g_ref(g.handle);
+            this->handle = g.handle;
+        }
 
-        void set_valued_rules(value& v);
+        grammar& operator=(const grammar& g) {
+            marpa_g_ref(g.handle);
+            this->handle = g.handle;
+            return *this;
+        }
+
+        ~grammar() {
+            marpa_g_ref(handle);
+        }
+
+        template <class T>
+        void set_valued_rules(T& v) {
+            for (auto r : rules) {
+                v.rule_is_valued(r, 1);
+            }
+        }
 
         inline symbol_id start_symbol() const {
             return marpa_g_start_symbol(handle);

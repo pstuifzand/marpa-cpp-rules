@@ -1,4 +1,4 @@
-CXXFLAGS=-std=c++11 -g -I/home/peter/cpp
+CXXFLAGS=-std=c++11 -g
 CXXLDFLAGS=-lstdc++ -g libmarpa.a
 
 all: rules rules2 testmarpa testmarpa2 calc comma literal diff
@@ -47,10 +47,10 @@ clean:
 read_file.o: read_file.cpp
 	gcc -c -o $@ $< -std=c++11 -Wall -g -lstdc++
 
-rules.o: rules.cpp marpa.hpp symbol_table.h
+rules.o: rules.cpp marpa-cpp/marpa.hpp symbol_table.h
 	gcc -c -o $@ $< $(CXXFLAGS)
 
-rules2.o: rules2.cpp marpa.hpp symbol_table.h
+rules2.o: rules2.cpp marpa-cpp/marpa.hpp symbol_table.h
 	gcc -c -o $@ $< $(CXXFLAGS)
 
 errors.o: errors.cpp

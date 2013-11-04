@@ -17,8 +17,8 @@ expr ::= words
 
 words ::= word+ ws
 
-word  ::= hello          {{ std::cout << "hello"; }}
-word  ::= world          {{ std::cout << "world"; }}
+word  ::= hello          {{ std::cout << "hello\n"; }}
+word  ::= world          {{ std::cout << "world\n"; }}
 
 hello ~ "hello"
 world ~ "world"
