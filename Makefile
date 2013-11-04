@@ -41,8 +41,9 @@ diff: diff.cpp errors.cpp
 
 clean:
 	rm -f errors.o rules.o rules2.o read_file.o
-	rm -f test.cpp test2.cpp calc.cpp
-	rm -f rules rules2 testmarpa testmarpa2 calc
+	rm -f comma.o literal.o diff.o
+	rm -f test.cpp test2.cpp calc.cpp diff.cpp literal.cpp comma.cpp
+	rm -f rules rules2 testmarpa testmarpa2 calc literal diff comma
 
 read_file.o: read_file.cpp
 	gcc -c -o $@ $< -std=c++11 -Wall -g -lstdc++

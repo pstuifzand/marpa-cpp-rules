@@ -35,6 +35,17 @@ bool operator==(const grammar_rule& a, const grammar_rule& b) {
     return a.lhs == b.lhs && a.rhs == b.rhs && a.code == b.code;
 }
 
+struct token_rule {
+    int lhs;
+    int str;
+    friend bool operator==(const token_rule& a, const token_rule& b);
+};
+
+bool operator==(const token_rule& a, const token_rule& b) {
+    return a.lhs == b.lhs && a.str == b.str;
+}
+
+
 void replace_variables(std::string& block, const std::string& var, const std::string& with) {
     auto it = std::search(block.begin(), block.end(), var.begin(), var.end());
     while (it != block.end()) {
@@ -49,7 +60,10 @@ void output_rules(
     indexed_table<grammar_rule>& rules,
     const indexed_table<std::string>& names,
     const indexed_table<std::vector<int>>& names_names,
-    const indexed_table<std::string>& code_blocks) {
+    const indexed_table<std::string>& code_blocks,
+    const indexed_table<std::string>& strings,
+    const indexed_table<token_rule>& token_rules
+    ) {
 
     using std::cout;
 
@@ -118,6 +132,13 @@ void output_rules(
     }
 
     cout << "}\n";
+    
+    cout << "void create_tokens(std::vector<std::tuple<std::string, grammar::symbol_id, int>>& tokens) {\n";
+    for (token_rule r : token_rules) {
+        cout << "\ttokens.emplace_back(\"" << strings[r.str] << "\", R_" << names[r.lhs] << ", 0);\n";
+    }
+    cout << "}\n";
+
 
     cout << "void evaluate_rules(grammar& g, recognizer& r, value& v, std::vector<int>& stack) {\n";
     cout << "\tusing rule = grammar::rule_id;\n";
@@ -165,12 +186,15 @@ int main(int argc, char** argv)
     grammar::symbol_id R_lhs         = g.new_symbol();
     grammar::symbol_id R_rhs         = g.new_symbol();
     grammar::symbol_id R_names       = g.new_symbol();
+    grammar::symbol_id R_nquote      = g.new_symbol();
 
     grammar::symbol_id T_bnfop       = g.new_symbol();
     grammar::symbol_id T_name        = g.new_symbol();
     grammar::symbol_id T_min         = g.new_symbol();
     grammar::symbol_id T_null        = g.new_symbol();
     grammar::symbol_id T_code        = g.new_symbol();
+    grammar::symbol_id T_strop       = g.new_symbol();
+    grammar::symbol_id T_string      = g.new_symbol();
 
     g.start_symbol(R_rules);
 
@@ -179,6 +203,7 @@ int main(int argc, char** argv)
     rule rule_id_rules   = g.new_sequence(R_rules, R_rule, -1, 1, 0);
     rule rule_id_rule_0  = g.add_rule(R_rule, { R_lhs, T_bnfop, R_rhs });
     rule rule_id_rule_1  = g.add_rule(R_rule, { R_lhs, T_bnfop, R_rhs, T_code });
+    rule rule_id_rule_2  = g.add_rule(R_rule, { R_lhs, T_strop, T_string });
     rule rule_id_lhs_0   = g.add_rule(R_lhs,  { T_name });
     rule rule_id_rhs_0   = g.add_rule(R_rhs,  { R_names });
     rule rule_id_rhs_1   = g.add_rule(R_rhs,  { T_name, T_min });
@@ -206,6 +231,8 @@ int main(int argc, char** argv)
     std::string code_end{"}}"};
 
     indexed_table<std::string> names;
+    indexed_table<std::string> strings;
+    strings.add("");
     indexed_table<std::string> code_blocks;
     code_blocks.add(""); // empty code block
 
@@ -230,6 +257,7 @@ int main(int argc, char** argv)
         std::make_tuple("null", T_null,  0),
         std::make_tuple("*",    T_min,   0),
         std::make_tuple("+",    T_min,   1),
+        std::make_tuple("~",    T_strop, 0),
     };
 
     while (it != sep_pos) {
@@ -248,6 +276,16 @@ int main(int argc, char** argv)
             std::string id(begin, it);
             int idx = names.add(id);
             r.read(T_name, idx, 1);
+            continue;
+        }
+        if (*it == '"') {
+            it++;
+            auto begin = it;
+            it = std::find_if_not(begin, sep_pos, [](char v) { return v != '"'; });
+            std::string str(begin, it);
+            int idx = strings.add(str);
+            r.read(T_string, idx, 1);
+            it++;
             continue;
         }
 
@@ -303,6 +341,7 @@ int main(int argc, char** argv)
         indexed_table<grammar_rule>     rules;
         indexed_table<grammar_rhs>      lrhs;
         indexed_table<std::vector<int>> names_names;
+        indexed_table<token_rule>       token_rules;
 
         for (;;) {
             value::step_type type = v.step();
@@ -324,7 +363,7 @@ int main(int argc, char** argv)
                     /* BEGIN OF RULE SEMANTICS */
                     if (rule == rule_id_rules) {   // list of rules
                         std::cout << pre_block << "\n";
-                        output_rules(rules, names, names_names, code_blocks);
+                        output_rules(rules, names, names_names, code_blocks, strings, token_rules);
                         std::cout << post_block << "\n";
                     }
                     else if (rule == rule_id_rule_0) { // lhs ::= rhs
@@ -339,6 +378,11 @@ int main(int argc, char** argv)
                         int code = stack[v.arg_0()+3];
                         grammar_rhs rhs_s = lrhs[rhs];
                         rules.add(grammar_rule{lhs, rhs_s, code });
+                    }
+                    else if (rule == rule_id_rule_2) { // lhs ~ string
+                        int lhs = stack[v.arg_0()];
+                        int str = stack[v.arg_0()+2];
+                        token_rules.add(token_rule{lhs, str });
                     }
                     else if (rule == rule_id_lhs_0) {  // name
                         stack[v.result()] = stack[v.arg_0()];
