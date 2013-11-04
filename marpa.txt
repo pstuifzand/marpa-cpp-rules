@@ -5,7 +5,7 @@
 #include <fstream>
 #include <iomanip>
 #include "util.h"
-#include "marpa.h"
+#include "marpa-cpp/marpa.hpp"
 #include "symbol_table.h"
 #include "error.h"
 #include "read_file.h"
@@ -35,9 +35,20 @@ bool operator==(const grammar_rule& a, const grammar_rule& b) {
     return a.lhs == b.lhs && a.rhs == b.rhs && a.code == b.code;
 }
 
+struct token_rule {
+    int lhs;
+    int str;
+    friend bool operator==(const token_rule& a, const token_rule& b);
+};
+
+bool operator==(const token_rule& a, const token_rule& b) {
+    return a.lhs == b.lhs && a.str == b.str;
+}
+
 indexed_table<grammar_rule>     rules;
 indexed_table<grammar_rhs>      lrhs;
 indexed_table<std::vector<int>> names_names;
+indexed_table<token_rule>       token_rules;
 
 void replace_variables(std::string& block, const std::string& var, const std::string& with) {
     auto it = std::search(block.begin(), block.end(), var.begin(), var.end());
@@ -54,7 +65,10 @@ void output_rules(
     indexed_table<grammar_rule>& rules,
     const indexed_table<std::string>& names,
     const indexed_table<std::vector<int>>& names_names,
-    const indexed_table<std::string>& code_blocks) {
+    const indexed_table<std::string>& code_blocks,
+    const indexed_table<std::string>& strings,
+    indexed_table<token_rule>& token_rules
+    ) {
 
     using std::cout;
 
@@ -104,7 +118,14 @@ void output_rules(
             cout << "});\n";
         }
         else {
-            cout << "\trule_id_" << names[rule.lhs] << " = g.new_sequence(R_" << names[rule.lhs] << ", R_" << names[rule.rhs.names_names_idx] << ", " << rule.rhs.sep << ", " << rule.rhs.min << ", 0);\n";
+            cout << "\trule_id_" << names[rule.lhs] << " = g.new_sequence(R_" << names[rule.lhs] << ", R_" << names[rule.rhs.names_names_idx] << ", ";
+            if (rule.rhs.sep == -1) {
+                cout << "-1";
+            } else {
+                cout << "R_" << names[rule.rhs.sep];
+            }
+
+            cout << ", " << rule.rhs.min << ", 0);\n";
         }
     }
     cout << "\tg.start_symbol(R_" << names[0] << ");\n";
@@ -123,6 +144,12 @@ void output_rules(
     }
 
     cout << "}\n\n";
+
+    cout << "void create_tokens(std::vector<std::tuple<std::string, grammar::symbol_id, int>>& tokens) {\n";
+    for (token_rule r : token_rules) {
+        cout << "\ttokens.emplace_back(\"" << strings[r.str] << "\", R_" << names[r.lhs] << ", 0);\n";
+    }
+    cout << "}\n";
 
     cout << "template <typename T>\n";
     cout << "void evaluate_rules(grammar& g, recognizer& r, value& v, std::vector<T>& stack) {\n";
@@ -163,6 +190,7 @@ void output_rules(
 }
 
 indexed_table<std::string> names;
+indexed_table<std::string> strings;
 indexed_table<std::string> code_blocks;
 
 std::string pre_block;
@@ -173,23 +201,37 @@ std::string post_block;
 # top rule
 rules ::= rule+              {{
     std::cout << pre_block;
-    output_rules(rules, names, names_names, code_blocks);
+    output_rules(rules, names, names_names, code_blocks, strings, token_rules);
     std::cout << post_block;
 }}
 
-rule  ::= lhs bnfop rhs      {{ rules.add(grammar_rule{$0, lrhs[$2], 0}); }}
-rule  ::= lhs bnfop rhs code {{ rules.add(grammar_rule{$0, lrhs[$2], $3}); }}
+BNF     ~ "::="
+STROP   ~ "~"
+NULL    ~ "null"
+STAR    ~ "*"
+PLUS    ~ "+"
+
+rule  ::= lhs BNF rhs        {{ rules.add(grammar_rule{$0, lrhs[$2], 0}); }}
+rule  ::= lhs BNF rhs code   {{ rules.add(grammar_rule{$0, lrhs[$2], $3}); }}
+rule  ::= lhs STROP string   {{ token_rules.add(token_rule{$0, $2}); }}
+
 lhs   ::= name               {{ $$ = $0; }}
+
 rhs   ::= names              {{ $$ = lrhs.add(grammar_rhs{$0, 2, -1}); }}
 rhs   ::= name min           {{ $$ = lrhs.add(grammar_rhs{$0, $1, -1}); }}
 rhs   ::= name min name      {{ $$ = lrhs.add(grammar_rhs{$0, $1, $2}); }}
 rhs   ::= null               {{ $$ = 0; }}
+
 names ::= name+              {{ std::vector<int> nms{ &$0, &$N }; $$ = names_names.add(nms); }}
+
+min   ::= STAR               {{ $$ = 0; }}
+min   ::= PLUS               {{ $$ = 1; }}
 
 %%
 
 int main(int argc, char** argv) {
 
+    strings.add(""); // empty string
     code_blocks.add(""); // empty code block
     lrhs.add(grammar_rhs{});
 
@@ -222,12 +264,8 @@ int main(int argc, char** argv) {
 
     post_block.assign(sep_pos + 2, input.end());
 
-    std::vector<std::tuple<std::string, grammar::symbol_id, int>> tokens{
-        std::make_tuple("::=",  R_bnfop, 0),
-        std::make_tuple("null", R_null,  0),
-        std::make_tuple("*",    R_min,   0),
-        std::make_tuple("+",    R_min,   1),
-    };
+    std::vector<std::tuple<std::string, grammar::symbol_id, int>> tokens;
+    create_tokens(tokens);
 
     auto last = sep_pos;
 
@@ -246,6 +284,20 @@ int main(int argc, char** argv) {
             std::string id(begin, it);
             int idx = names.add(id);
             r.read(R_name, idx, 1);
+            continue;
+        }
+        if (*it == '"') {
+            it++;
+            auto begin = it;
+            it = std::find_if_not(begin, last, [](char v) { return v != '"'; });
+            std::string str(begin, it);
+            if (it == last) {
+                std::cerr << "String end not found before end of file\n";
+                exit(1);
+            }
+            int idx = strings.add(str);
+            r.read(R_string, idx, 1);
+            it++;
             continue;
         }
 

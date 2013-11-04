@@ -5,7 +5,7 @@
 #include <fstream>
 #include <iomanip>
 #include "util.h"
-#include "marpa.h"
+#include "marpa-cpp/marpa.hpp"
 #include "symbol_table.h"
 #include "error.h"
 #include "read_file.h"
@@ -232,6 +232,8 @@ int main(int argc, char** argv)
         std::make_tuple("+",    T_min,   1),
     };
 
+    auto out = make_read_iterator(r);
+
     while (it != sep_pos) {
 
         it = skip(it, sep_pos, isspace);
@@ -247,7 +249,8 @@ int main(int argc, char** argv)
             it = std::find_if_not(begin, sep_pos, isalpha);
             std::string id(begin, it);
             int idx = names.add(id);
-            r.read(T_name, idx, 1);
+//r.read(T_name, idx, 1);
+            *out++ = std::make_pair(T_name, idx);
             continue;
         }
 
@@ -255,7 +258,8 @@ int main(int argc, char** argv)
         for (auto t : tokens) {
             auto new_it = match(it, sep_pos, std::get<0>(t).begin(), std::get<0>(t).end());
             if (new_it != it) {
-                r.read(std::get<1>(t), std::get<2>(t), 1);
+                //r.read(std::get<1>(t), std::get<2>(t), 1);
+                *out++ = std::make_pair(std::get<1>(t), std::get<2>(t));
                 it = new_it;
                 found = true;
                 break;

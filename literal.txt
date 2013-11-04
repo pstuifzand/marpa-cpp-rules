@@ -11,24 +11,20 @@
 
 using namespace marpa;
 
-std::vector<int> numbers;
-
 %%
 
-expr ::= number+ comma   {{
-    auto it   = &$0;
-    auto last = &$N;
-    for (;;) {
-        numbers.push_back(*it);
-        ++it;
-        if (it == last) break;
-        ++it;
-        if (it == last) break;
-    }
-    $$ = numbers.size();
-}}
+expr ::= words
 
-comma ~ ","
+words ::= word+ ws
+
+word  ::= hello          {{ std::cout << "hello"; }}
+word  ::= world          {{ std::cout << "world"; }}
+
+hello ~ "hello"
+world ~ "world"
+
+ws    ::= sp
+sp      ~ " "
 
 %%
 
@@ -46,27 +42,17 @@ int main(int argc, char** argv) {
     create_tokens(tokens);
 
     while (it != input.end()) {
-        if (isspace(*it)) {
-            it++;
-        }
-        else if (isdigit(*it)) {
-            auto n = parse_digit(it, input.end(), 10, '0');
-            r.read(R_number, n.second, 1);
-            it = n.first;
-        }
-        else {
-            bool found = false;
-            for (auto t : tokens) {
-                auto new_it = match(it, input.end(), std::get<0>(t).begin(), std::get<0>(t).end());
-                if (new_it != it) {
-                    r.read(std::get<1>(t), std::get<2>(t), 1);
-                    it = new_it;
-                    found = true;
-                    break;
-                }
+        bool found = false;
+        for (auto t : tokens) {
+            auto new_it = match(it, input.end(), std::get<0>(t).begin(), std::get<0>(t).end());
+            if (new_it != it) {
+                r.read(std::get<1>(t), std::get<2>(t), 1);
+                it = new_it;
+                found = true;
+                break;
             }
-            if (found) continue;
         }
+        if (found) continue;
     }
 
     bocage b{r, r.latest_earley_set()};
@@ -81,12 +67,14 @@ int main(int argc, char** argv) {
     /* Evaluate trees */
     while (t.next() >= 0) {
         value v{t};
-        //g.set_valued_rules(v);
+        g.set_valued_rules(v);
 
         //v.rule_is_valued(rule_id_expr, 1);
+        /*
         v.symbol_is_valued(R_expr, 1);
         v.symbol_is_valued(R_number, 1);
         v.symbol_is_valued(R_comma, 1);
+        */
 
         std::vector<int> stack;
         stack.resize(128);
@@ -123,10 +111,6 @@ int main(int argc, char** argv) {
             }
         }
         END: ;
-    }
-
-    for (auto n : numbers) {
-        std::cout << n << "\n";
     }
 }
 

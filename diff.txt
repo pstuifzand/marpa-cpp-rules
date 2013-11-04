@@ -6,7 +6,7 @@
 #include <iomanip>
 #include <memory>
 #include "util.h"
-#include "marpa.h"
+#include "marpa-cpp/marpa.hpp"
 #include "symbol_table.h"
 #include "error.h"
 
@@ -32,35 +32,51 @@ class op : public node {
         op(std::shared_ptr<node> left, std::shared_ptr<node> right) : left(left), right(right) {}
         virtual ~op() {}
         virtual void show() {
+            std::cout << "(";
             left->show();
             std::cout << " " << oper() << " ";
             right->show();
+            std::cout << ")";
         }
-        virtual std::string oper() = 0;
+        virtual std::string oper() const = 0;
     private:
         std::shared_ptr<node> left;
         std::shared_ptr<node> right;
 };
 
-class add : public op {
+class op_add : public op {
     public:
-        add(std::shared_ptr<node> left, std::shared_ptr<node> right) : op(left, right) {}
-        virtual ~add() {}
-        virtual std::string oper() { return "+"; }
+        op_add(std::shared_ptr<node> left, std::shared_ptr<node> right) : op(left, right) {}
+        virtual ~op_add() {}
+        virtual std::string oper() const { return "+"; }
 };
 
-class mul : public op {
+class op_sub : public op {
     public:
-        mul(std::shared_ptr<node> left, std::shared_ptr<node> right) : op(left, right) {}
-        virtual ~mul() {}
-        virtual std::string oper() { return "*"; }
+        op_sub(std::shared_ptr<node> left, std::shared_ptr<node> right) : op(left, right) {}
+        virtual ~op_sub() {}
+        virtual std::string oper() const { return "-"; }
 };
 
-class power : public op {
+class op_mul : public op {
     public:
-        power(std::shared_ptr<node> left, std::shared_ptr<node> right) : op(left, right) {}
-        virtual ~power() {}
-        virtual std::string oper() { return "^"; }
+        op_mul(std::shared_ptr<node> left, std::shared_ptr<node> right) : op(left, right) {}
+        virtual ~op_mul() {}
+        virtual std::string oper() const { return "*"; }
+};
+
+class op_div : public op {
+    public:
+        op_div(std::shared_ptr<node> left, std::shared_ptr<node> right) : op(left, right) {}
+        virtual ~op_div() {}
+        virtual std::string oper() const { return "/"; }
+};
+
+class op_power : public op {
+    public:
+        op_power(std::shared_ptr<node> left, std::shared_ptr<node> right) : op(left, right) {}
+        virtual ~op_power() {}
+        virtual std::string oper() const { return "^"; }
 };
 
 class number : public node {
@@ -78,12 +94,14 @@ indexed_table<std::shared_ptr<node>> nodes;
 
 expr   ::= term                   {{ $$ = $0; }}
 
-term   ::= term ADD term          {{ $$ = std::make_shared<add>($0, $2); }}
+term   ::= term ADD term          {{ $$ = std::make_shared<op_add>($0, $2); }}
+term   ::= term SUB term          {{ $$ = std::make_shared<op_sub>($0, $2); }}
 term   ::= factor                 {{ $$ = $0; }}
 
-factor ::= factor MUL factor      {{ $$ = std::make_shared<mul>($0, $2); }}
+factor ::= factor MUL factor      {{ $$ = std::make_shared<op_mul>($0, $2); }}
+factor ::= factor DIV factor      {{ $$ = std::make_shared<op_div>($0, $2); }}
 factor ::= number                 {{ $$ = $0; }}
-factor ::= id POWER number        {{ $$ = std::make_shared<power>($0, $2); }}
+factor ::= id POWER number        {{ $$ = std::make_shared<op_power>($0, $2); }}
 factor ::= id                     {{ $$ = $0; }}
 
 id     ::= X                      {{ $$ = std::make_shared<id>(); }}
@@ -116,8 +134,16 @@ int main(int argc, char** argv) {
             r.read(R_ADD, 0, 1);
             it++;
         }
+        else if (*it == '-') {
+            r.read(R_SUB, 0, 1);
+            it++;
+        }
         else if (*it == '*') {
             r.read(R_MUL, 0, 1);
+            it++;
+        }
+        else if (*it == '/') {
+            r.read(R_DIV, 0, 1);
             it++;
         }
         else if (*it == '^') {
