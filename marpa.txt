@@ -220,7 +220,7 @@ lhs   ::= name               {{ $$ = $0; }}
 rhs   ::= names              {{ $$ = lrhs.add(grammar_rhs{$0, 2, -1}); }}
 rhs   ::= name min           {{ $$ = lrhs.add(grammar_rhs{$0, $1, -1}); }}
 rhs   ::= name min name      {{ $$ = lrhs.add(grammar_rhs{$0, $1, $2}); }}
-rhs   ::= null               {{ $$ = 0; }}
+rhs   ::= NULL               {{ $$ = 0; }}
 
 names ::= name+              {{ std::vector<int> nms{ &$0, &$N }; $$ = names_names.add(nms); }}
 
@@ -278,6 +278,18 @@ int main(int argc, char** argv) {
             continue;
         }
 
+        bool found = false;
+        for (auto t : tokens) {
+            auto new_it = match(it, last, std::get<0>(t).begin(), std::get<0>(t).end());
+            if (new_it != it) {
+                r.read(std::get<1>(t), std::get<2>(t), 1);
+                it = new_it;
+                found = true;
+                break;
+            }
+        }
+        if (found) continue;
+
         if (isalpha(*it)) {
             auto begin = it;
             it = skip(begin, last, isalpha);
@@ -300,18 +312,6 @@ int main(int argc, char** argv) {
             it++;
             continue;
         }
-
-        bool found = false;
-        for (auto t : tokens) {
-            auto new_it = match(it, last, std::get<0>(t).begin(), std::get<0>(t).end());
-            if (new_it != it) {
-                r.read(std::get<1>(t), std::get<2>(t), 1);
-                it = new_it;
-                found = true;
-                break;
-            }
-        }
-        if (found) continue;
 
         auto p = std::mismatch(it, last, code_start.begin());
         if (p.second == code_start.end()) {

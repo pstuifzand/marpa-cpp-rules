@@ -1,0 +1,122 @@
+#include <vector>
+#include <algorithm>
+#include <iostream>
+#include <iterator>
+#include <fstream>
+#include <iomanip>
+#include "util.h"
+#include "marpa-cpp/marpa.hpp"
+#include "symbol_table.h"
+#include "error.h"
+
+using namespace marpa;
+
+%%
+
+expr ::= parens
+
+parens ::= lp parens rp
+parens ::= null
+
+lp  ~ "("
+rp  ~ ")"
+
+%%
+
+int main(int argc, char** argv) {
+    grammar g;
+    create_grammar(g);
+
+    if (g.error() != MARPA_ERR_NONE) {
+        if (g.error() == MARPA_ERR_NO_PARSE) {
+            std::cout << "No parse possible\n";
+            return 1;
+        }
+        std::cout << "After tokens: " << marpa_errors[g.error()] << "\n";
+        return 1;
+    }
+
+    recognizer r(g);
+
+    std::string input = argv[1];
+
+    auto it = input.begin();
+
+    std::vector<std::tuple<std::string, grammar::symbol_id, int>> tokens;
+    create_tokens(tokens);
+
+    while (it != input.end()) {
+        bool found = false;
+        for (auto t : tokens) {
+            auto new_it = match(it, input.end(), std::get<0>(t).begin(), std::get<0>(t).end());
+            if (new_it != it) {
+                r.read(std::get<1>(t), std::get<2>(t), 1);
+                it = new_it;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            std::cout << "Unknown token: " << std::string(it,input.end()) << "\n";
+            break;
+        }
+    }
+
+    bocage b{r, r.latest_earley_set()};
+
+    if (g.error() != MARPA_ERR_NONE) {
+        if (g.error() == MARPA_ERR_NO_PARSE) {
+            std::cout << "No parse possible\n";
+            return 1;
+        }
+        std::cout << "After tokens: " << marpa_errors[g.error()] << "\n";
+        return 1;
+    }
+
+    order o{b};
+    tree t{o};
+
+    /* Evaluate trees */
+    while (t.next() >= 0) {
+        value v{t};
+        g.set_valued_rules(v);
+        std::vector<int> stack;
+        stack.resize(128);
+
+        for (;;) {
+            value::step_type type = v.step();
+
+            switch (type) {
+                case MARPA_STEP_INITIAL:
+                    stack.resize(1);
+                    break;
+                case MARPA_STEP_TOKEN: {
+                    stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
+                    stack[v.result()] = v.token_value();
+                    break;
+                }
+                case MARPA_STEP_RULE: {
+                    grammar::rule_id rule = v.rule();
+                    stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
+
+                    /* BEGIN OF RULE SEMANTICS */
+                    evaluate_rules(g, r, v, stack);
+                    /* END OF RULE SEMANTICS */
+                    break;
+                }
+                case MARPA_STEP_NULLING_SYMBOL: {
+                    int res    = v.result();
+                    grammar::symbol_id sym = v.symbol();
+                    //stack[res] = v.token(); 
+                    break;
+                }
+                case MARPA_STEP_INACTIVE:
+                    goto END;
+            }
+        }
+        END: ;
+    }
+
+    std::cout << "Parse possible: balanced\n";
+}
+

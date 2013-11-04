@@ -1,7 +1,7 @@
 CXXFLAGS=-std=c++11 -g
 CXXLDFLAGS=-lstdc++ -g libmarpa.a
 
-all: rules rules2 testmarpa testmarpa2 calc comma literal diff
+all: rules rules2 testmarpa testmarpa2 calc comma literal diff balanced
 
 test.cpp: rules2 marpa.txt
 	./rules2 marpa.txt > $@
@@ -17,6 +17,9 @@ comma.cpp: testmarpa comma.txt
 
 literal.cpp: testmarpa literal.txt
 	./testmarpa literal.txt > $@
+
+balanced.cpp: testmarpa balanced.txt
+	./testmarpa balanced.txt > $@
 
 diff.cpp: testmarpa diff.txt
 	./testmarpa diff.txt > $@
@@ -36,14 +39,17 @@ comma: comma.cpp errors.cpp read_file.o
 literal: literal.cpp errors.cpp read_file.o
 	gcc $^ -o $@ $(CXXLDFLAGS) $(CXXFLAGS)
 
+balanced: balanced.cpp errors.cpp read_file.o
+	gcc $^ -o $@ $(CXXLDFLAGS) $(CXXFLAGS)
+
 diff: diff.cpp errors.cpp
 	gcc $^ -o $@ $(CXXLDFLAGS) $(CXXFLAGS)
 
 clean:
 	rm -f errors.o rules.o rules2.o read_file.o
-	rm -f comma.o literal.o diff.o
-	rm -f test.cpp test2.cpp calc.cpp diff.cpp literal.cpp comma.cpp
-	rm -f rules rules2 testmarpa testmarpa2 calc literal diff comma
+	rm -f comma.o literal.o diff.o balanced.o
+	rm -f test.cpp test2.cpp calc.cpp diff.cpp literal.cpp comma.cpp balanced.cpp
+	rm -f rules rules2 testmarpa testmarpa2 calc literal diff comma balanced
 
 read_file.o: read_file.cpp
 	gcc -c -o $@ $< -std=c++11 -Wall -g -lstdc++
