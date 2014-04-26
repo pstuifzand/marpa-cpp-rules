@@ -1,0 +1,34 @@
+
+%%
+
+# top rule
+rules ::= rule+              {{
+    std::cout << pre_block;
+    output_rules(rules, names, names_names, code_blocks, strings, token_rules);
+    std::cout << post_block;
+}}
+
+BNF     ~ "::="
+STROP   ~ "~"
+NULL    ~ "null"
+STAR    ~ "*"
+PLUS    ~ "+"
+
+rule  ::= lhs BNF rhs        {{ rules.add(grammar_rule{$0, lrhs[$2], 0}); }}
+rule  ::= lhs BNF rhs code   {{ rules.add(grammar_rule{$0, lrhs[$2], $3}); }}
+rule  ::= lhs STROP string   {{ token_rules.add(token_rule{$0, $2}); }}
+
+lhs   ::= name               {{ $$ = $0; }}
+
+rhs   ::= names              {{ $$ = lrhs.add(grammar_rhs{$0, 2, -1}); }}
+rhs   ::= name min           {{ $$ = lrhs.add(grammar_rhs{$0, $1, -1}); }}
+rhs   ::= name min name      {{ $$ = lrhs.add(grammar_rhs{$0, $1, $2}); }}
+rhs   ::= NULL               {{ $$ = 0; }}
+
+names ::= name+              {{ std::vector<int> nms{ &$0, &$N }; $$ = names_names.add(nms); }}
+
+min   ::= STAR               {{ $$ = 0; }}
+min   ::= PLUS               {{ $$ = 1; }}
+
+%%
+

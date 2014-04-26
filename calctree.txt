@@ -1,0 +1,180 @@
+#include <vector>
+#include <algorithm>
+#include <iostream>
+#include <iterator>
+#include <fstream>
+#include <iomanip>
+#include "util.h"
+#include "marpa-cpp/marpa.hpp"
+#include "symbol_table.h"
+#include "error.h"
+#include "tree.hh"
+
+const int T_VAL   = 1;
+const int T_OP    = 2;
+const int T_TOP   = 3;
+
+const int OP_PLUS = 1;
+const int OP_MIN  = 2;
+const int OP_MUL  = 3;
+const int OP_DIV  = 4;
+
+struct node {
+    int type;
+    int val;
+};
+
+const char* op_names[] =  {
+    0, "+", "-", "*", "/",
+};
+
+node make_node(int type, int val) {
+    return node{type, val};
+}
+
+template <class T, class I>
+void show(T& t, I first, I last) {
+    while (first != last) {
+        if (first->type == T_TOP) {
+            show(t, t.begin(first), t.end(first));
+            return;
+        }
+
+        if (first->type == T_OP) {
+            auto f = t.begin(first);
+            auto l = t.end(first);
+
+            bool first_loop = true;
+
+            while (f != l) {
+                if (!first_loop) {
+                    std::cout << op_names[first->val];
+                }
+
+                first_loop = false;
+
+                if (f->type == T_VAL) {
+                    std::cout << f->val;
+                } else {
+                    std::cout << "(";
+                    show(t, f, l);
+                    std::cout << ")";
+                }
+                ++f;
+            }
+        }
+        ++first;
+    }
+}
+
+tree<node> parse_tree;
+
+%%
+
+expr   ::= term                   {{ show(parse_tree, parse_tree.begin(), parse_tree.end()); }}
+
+term   ::= term add term          {{ $$ = $0 + $2; }}
+term   ::= term sub term          {{ $$ = $0 - $2; }}
+term   ::= factor                 {{ $$ = $0; }}
+
+factor ::= factor mul factor      {{ $$ = $0 * $2; }}
+factor ::= number                 {{ $$ = $0; }}
+
+%%
+
+int main(int argc, char** argv) {
+    marpa::grammar g;
+    create_grammar(g);
+
+    marpa::recognizer r(g);
+
+    if (argc != 2) {
+        std::cout << "Usage: " << argv[0] << " string-input\n";
+        return 1;
+    }
+
+    std::string input = argv[1];
+
+    auto it = input.begin();
+
+    while (it != input.end()) {
+        if (isspace(*it)) {
+            it++;
+        }
+        else if (isdigit(*it)) {
+            auto n = parse_digit(it, input.end(), 10, '0');
+            r.read(R_number, n.second, 1);
+            it = n.first;
+        }
+        else if (*it == '+') {
+            r.read(R_add, 0, 1);
+            it++;
+        }
+        else if (*it == '-') {
+            r.read(R_sub, 0, 1);
+            it++;
+        }
+        else if (*it == '*') {
+            r.read(R_mul, 0, 1);
+            it++;
+        }
+        /*
+        else if (*it == '(' || *it == ')') {
+            r.read(*it == '(' ? T_LB : T_RB, 0, 1);
+            it++;
+        }*/
+    }
+
+    marpa::bocage b{r, r.latest_earley_set()};
+    if (g.error() != MARPA_ERR_NONE) {
+        std::cout << marpa_errors[g.error()] << "\n";
+        return 1;
+    }
+
+    marpa::order o{b};
+    marpa::tree t{o};
+
+
+    /* Evaluate trees */
+    while (t.next() >= 0) {
+        marpa::value v{t};
+        g.set_valued_rules(v);
+
+        std::vector<int> stack;
+        stack.resize(128);
+
+        for (;;) {
+            marpa::value::step_type type = v.step();
+
+            switch (type) {
+                case MARPA_STEP_INITIAL:
+                    stack.resize(1);
+                    break;
+                case MARPA_STEP_TOKEN: {
+                    stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
+
+                    stack[v.result()] = v.token_value();
+
+                    break;
+                }
+                case MARPA_STEP_RULE: {
+                    marpa::grammar::rule_id rule = v.rule();
+                    stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
+
+                    /* BEGIN OF RULE SEMANTICS */
+                    evaluate_rules(g, r, v, stack);
+                    /* END OF RULE SEMANTICS */
+                    break;
+                }
+                case MARPA_STEP_NULLING_SYMBOL: {
+                    int res    = v.result();
+                    stack[res] = v.token_value(); 
+                    break;
+                }
+                case MARPA_STEP_INACTIVE:
+                    goto END;
+            }
+        }
+        END: ;
+    }
+}

@@ -10,8 +10,6 @@
 #include "error.h"
 #include "read_file.h"
 
-using namespace marpa;
-
 struct grammar_rhs {
     int names_names_idx;
     int min; // 0 == *, 1 == +, 2 == names_names_idx
@@ -72,7 +70,7 @@ void output_rules(
 
     using std::cout;
 
-    cout << "\tusing rule = grammar::rule_id;\n";
+    cout << "\tusing rule = marpa::grammar::rule_id;\n";
 
     int last_lhs   = -1;
     int last_count = 0;
@@ -99,12 +97,12 @@ void output_rules(
     }
 
     for (auto name : names) {
-        cout << "\tgrammar::symbol_id R_" << std::setw(6) << std::left << name << ";\n";
+        cout << "\tmarpa::grammar::symbol_id R_" << std::setw(6) << std::left << name << ";\n";
     }
     cout << "\n\n";
 
     // generate grammar
-    cout << "void create_grammar(grammar& g) {\n";
+    cout << "void create_grammar(marpa::grammar& g) {\n";
     for (auto name : names) {
         cout << "\tR_" << std::setw(6) << std::left << name << " = g.new_symbol();\n";
     }
@@ -145,15 +143,15 @@ void output_rules(
 
     cout << "}\n\n";
 
-    cout << "void create_tokens(std::vector<std::tuple<std::string, grammar::symbol_id, int>>& tokens) {\n";
+    cout << "void create_tokens(std::vector<std::tuple<std::string, marpa::grammar::symbol_id, int>>& tokens) {\n";
     for (token_rule r : token_rules) {
         cout << "\ttokens.emplace_back(\"" << strings[r.str] << "\", R_" << names[r.lhs] << ", 0);\n";
     }
     cout << "}\n";
 
     cout << "template <typename T>\n";
-    cout << "void evaluate_rules(grammar& g, recognizer& r, value& v, std::vector<T>& stack) {\n";
-    cout << "\tusing rule = grammar::rule_id;\n";
+    cout << "void evaluate_rules(marpa::grammar& g, marpa::recognizer& r, marpa::value& v, std::vector<T>& stack) {\n";
+    cout << "\tusing rule = marpa::grammar::rule_id;\n";
     cout << "\trule rule_id = v.rule();\n";
 
     // generate evaluators
@@ -235,10 +233,10 @@ int main(int argc, char** argv) {
     code_blocks.add(""); // empty code block
     lrhs.add(grammar_rhs{});
 
-    grammar g;
+    marpa::grammar g;
     create_grammar(g);
 
-    recognizer r(g);
+    marpa::recognizer r(g);
 
     std::string input;
 
@@ -264,7 +262,7 @@ int main(int argc, char** argv) {
 
     post_block.assign(sep_pos + 2, input.end());
 
-    std::vector<std::tuple<std::string, grammar::symbol_id, int>> tokens;
+    std::vector<std::tuple<std::string, marpa::grammar::symbol_id, int>> tokens;
     create_tokens(tokens);
 
     auto last = sep_pos;
@@ -333,27 +331,25 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-
-
-    bocage b{r, r.latest_earley_set()};
+    marpa::bocage b{r, r.latest_earley_set()};
     if (g.error() != MARPA_ERR_NONE) {
         std::cout << marpa_errors[g.error()] << "\n";
         return 1;
     }
 
-    order o{b};
-    tree t{o};
+    marpa::order o{b};
+    marpa::tree t{o};
 
     /* Evaluate trees */
     while (t.next() >= 0) {
-        value v{t};
+        marpa::value v{t};
         g.set_valued_rules(v);
 
         std::vector<int> stack;
         stack.resize(128);
 
         for (;;) {
-            value::step_type type = v.step();
+            marpa::value::step_type type = v.step();
 
             switch (type) {
                 case MARPA_STEP_INITIAL:

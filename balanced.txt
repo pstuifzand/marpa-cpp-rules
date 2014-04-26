@@ -24,7 +24,7 @@ rp  ~ ")"
 %%
 
 int main(int argc, char** argv) {
-    grammar g;
+    marpa::grammar g;
     create_grammar(g);
 
     if (g.error() != MARPA_ERR_NONE) {
@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 
     auto it = input.begin();
 
-    std::vector<std::tuple<std::string, grammar::symbol_id, int>> tokens;
+    std::vector<std::tuple<std::string, marpa::grammar::symbol_id, int>> tokens;
     create_tokens(tokens);
 
     while (it != input.end()) {
@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
                     break;
                 }
                 case MARPA_STEP_RULE: {
-                    grammar::rule_id rule = v.rule();
+                    marpa::grammar::rule_id rule = v.rule();
                     stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
 
                     /* BEGIN OF RULE SEMANTICS */
@@ -106,7 +106,7 @@ int main(int argc, char** argv) {
                 }
                 case MARPA_STEP_NULLING_SYMBOL: {
                     int res    = v.result();
-                    grammar::symbol_id sym = v.symbol();
+                    marpa::grammar::symbol_id sym = v.symbol();
                     //stack[res] = v.token(); 
                     break;
                 }

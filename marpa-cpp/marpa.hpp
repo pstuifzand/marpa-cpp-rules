@@ -35,7 +35,7 @@ class grammar {
         }
 
         ~grammar() {
-            marpa_g_ref(handle);
+            marpa_g_unref(handle);
         }
 
         template <class T>
