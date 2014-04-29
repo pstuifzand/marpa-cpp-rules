@@ -58,13 +58,7 @@ class grammar {
         }
 
         inline rule_id new_rule(symbol_id lhs_id, symbol_id* rhs_ids, int length) {
-            return marpa_g_rule_new(handle, lhs_id, rhs_ids, length);
-        }
-
-        inline rule_id add_rule(symbol_id lhs_id, std::initializer_list<symbol_id> rhs) {
-            grammar::symbol_id rhs_ids[rhs.size()]; 
-            std::copy(rhs.begin(), rhs.end(), rhs_ids);
-            rule_id id = new_rule(lhs_id, rhs_ids, rhs.size());
+            rule_id id = marpa_g_rule_new(handle, lhs_id, rhs_ids, length);
             rules.push_back(id);
             return id;
         }
@@ -73,6 +67,16 @@ class grammar {
             rule_id id = marpa_g_sequence_new(handle, lhs_id, rhs_id, separator_id, min, flags);
             rules.push_back(id);
             return id;
+        }
+
+        inline rule_id add_rule(symbol_id lhs_id, std::initializer_list<symbol_id> rhs) {
+            grammar::symbol_id rhs_ids[rhs.size()]; 
+            std::copy(rhs.begin(), rhs.end(), rhs_ids);
+            return new_rule(lhs_id, rhs_ids, rhs.size());
+        }
+
+        inline rule_id add_sequence(symbol_id lhs_id, symbol_id rhs_id, symbol_id separator_id, int min, int flags) {
+            return new_sequence(lhs_id, rhs_id, separator_id, min, flags);
         }
 
         inline void symbol_is_terminal(symbol_id sym_id, int value) {
@@ -167,6 +171,8 @@ class order {
         inline handle_type internal_handle() { return handle; }
     public:
         order(bocage& b) : handle(marpa_o_new(b.internal_handle())) {}
+        ~order() { marpa_o_unref(handle); }
+    private:
     private:
         order& operator=(const order&);
         order(const order&);
@@ -180,6 +186,7 @@ class tree {
         inline handle_type internal_handle() { return handle; }
     public:
         tree(order& o) : handle(marpa_t_new(o.internal_handle())) {}
+        ~tree() { marpa_t_unref(handle); }
 
         inline int next() { return marpa_t_next(handle); }
     private:
@@ -198,6 +205,7 @@ class value {
         inline handle_type internal_handle() { return handle; }
     public:
         value(tree& t) : handle(marpa_v_new(t.internal_handle())) {}
+        ~value() { marpa_v_unref(handle); }
 
         inline step_type step() { return marpa_v_step(handle); }
         inline void rule_is_valued(grammar::rule_id rule, int value) { marpa_v_rule_is_valued_set(handle, rule, value); }

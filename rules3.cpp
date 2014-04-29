@@ -392,7 +392,7 @@ int main(int argc, char** argv)
         marpa::value v{t};
         g.set_valued_rules(v);
 
-        evaluator<int, context> e(&ctxt);
+        evaluator<int, context> e{};
 
         e.set_rule_func(rule_id_rules, func_rules);
         e.set_rule_func(rule_id_rule_0, func_lhs_op_rhs);
@@ -405,7 +405,7 @@ int main(int argc, char** argv)
         e.set_rule_func(rule_id_rhs_3, func_name_min_sep);
         e.set_rule_func(rule_id_names_0, func_names_seq);
 
-        evaluate_steps(&e, v);
+        evaluate_steps(&e, v, &ctxt);
     }
 
     return 0;

@@ -13,22 +13,22 @@ class evaluator {
     private:
         std::vector<value_type>    stack;
         std::vector<function_type> rule_functions;
-        context_type*              conv;
     public:
-        evaluator(context_type* c) : conv(c) {}
+        evaluator() {}
+        ~evaluator() {}
 
-        void initial_step(marpa::value& v) {
+        void initial_step(context_type* context, marpa::value& v) {
             stack.resize(1);
-            conv->initial();
+            context->initial();
         }
 
-        void token_step(marpa::value& v) {
+        void token_step(context_type* context, marpa::value& v) {
             stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
             auto out = &stack[v.result()];
-            *out = conv->convert(v.token_value());
+            *out = context->convert(v.token_value());
         }
 
-        void rule_step(marpa::value& v) {
+        void rule_step(context_type* context, marpa::value& v) {
             marpa::grammar::rule_id rule = v.rule();
             stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
 
@@ -37,17 +37,17 @@ class evaluator {
             auto first  = &stack[v.arg_0()];
             auto last   = &stack[v.arg_n() + 1];
 
-            call_rule_function(rule, first, last, out);
+            call_rule_function(context, rule, first, last, out);
         }
 
         // not sure...
-        void nulling_symbol_step(marpa::value& v) {
+        void nulling_symbol_step(context_type* context, marpa::value& v) {
             auto out = &stack[v.result()];
-            *out = conv->convert(v.token_value());
+            *out = context->convert(v.token_value());
         }
 
-        void inactive_step(marpa::value& v) {
-            conv->inactive();
+        void inactive_step(context_type* context, marpa::value& v) {
+            context->inactive();
         }
 
         void set_rule_func(marpa::grammar::rule_id id, function_type func) {
@@ -55,32 +55,32 @@ class evaluator {
             rule_functions[id] = func;
         }
 
-        void call_rule_function(marpa::grammar::rule_id rule, int* first, int* last, int* out) {
-            rule_functions[rule](conv, first, last, out);
+        void call_rule_function(context_type* context, marpa::grammar::rule_id rule, int* first, int* last, int* out) {
+            rule_functions[rule](context, first, last, out);
         }
 
 };
 
-template <typename E>
-void evaluate_steps(E* e, marpa::value& v) {
+template <typename E, typename C>
+void evaluate_steps(E* e, marpa::value& v, C* ctxt) {
     for (;;) {
         marpa::value::step_type type = v.step();
 
         switch (type) {
             case MARPA_STEP_INITIAL:
-                e->initial_step(v);
+                e->initial_step(ctxt, v);
                 break;
             case MARPA_STEP_TOKEN:
-                e->token_step(v);
+                e->token_step(ctxt, v);
                 break;
             case MARPA_STEP_RULE:
-                e->rule_step(v);
+                e->rule_step(ctxt, v);
                 break;
             case MARPA_STEP_NULLING_SYMBOL:
-                e->nulling_symbol_step(v);
+                e->nulling_symbol_step(ctxt, v);
                 break;
             case MARPA_STEP_INACTIVE:
-                e->inactive_step(v);
+                e->inactive_step(ctxt, v);
                 return;
         }
     }

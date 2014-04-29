@@ -96,7 +96,6 @@ int main(int argc, char** argv) {
                     break;
                 }
                 case MARPA_STEP_RULE: {
-                    marpa::grammar::rule_id rule = v.rule();
                     stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
 
                     /* BEGIN OF RULE SEMANTICS */

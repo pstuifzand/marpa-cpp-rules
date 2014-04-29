@@ -66,7 +66,7 @@ rules.o: rules.cpp marpa-cpp/marpa.hpp symbol_table.h
 rules2.o: rules2.cpp marpa-cpp/marpa.hpp symbol_table.h
 	gcc -c -o $@ $< $(CXXFLAGS)
 
-rules3.o: rules3.cpp marpa-cpp/marpa.hpp symbol_table.h
+rules3.o: rules3.cpp marpa-cpp/marpa.hpp symbol_table.h evaluator.h grammar_bits.h error.h read_file.h
 	gcc -c -o $@ $< $(CXXFLAGS)
 
 errors.o: errors.cpp
