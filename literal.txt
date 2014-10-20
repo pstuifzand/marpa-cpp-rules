@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
     auto it = input.begin();
 
     std::vector<std::tuple<std::string, grammar::symbol_id, int>> tokens;
-    create_tokens(tokens);
+    tokens = create_tokens();
 
     while (it != input.end()) {
         bool found = false;

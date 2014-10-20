@@ -2,6 +2,8 @@
 #define UTIL_H
 
 template <class I, class N>
+    // I models ForwardIterator
+    // N models Integer
 std::pair<I, N> parse_digit(I first, I last, N base, typename std::iterator_traits<I>::value_type zero)
 {
     if (first == last) return make_pair(last, 0);

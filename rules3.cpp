@@ -98,13 +98,16 @@ void output_rules(
     }
 
     cout << "}\n";
+
+    cout << "typedef std::vector<std::tuple<std::string, marpa::grammar::symbol_id, int>> token_list;\n";
     
-    cout << "void create_tokens(std::vector<std::tuple<std::string, marpa::grammar::symbol_id, int>>& tokens) {\n";
+    cout << "token_list create_tokens() {\n";
+    cout << "    token_list tokens;\n";
     for (token_rule r : token_rules) {
         cout << "\ttokens.emplace_back(\"" << strings[r.str] << "\", R_" << names[r.lhs] << ", 0);\n";
     }
+    cout << "return tokens;\n";
     cout << "}\n";
-
 
     cout << "void evaluate_rules(marpa::grammar& g, marpa::recognizer& r, marpa::value& v, std::vector<int>& stack) {\n";
     cout << "\tusing rule = marpa::grammar::rule_id;\n";
@@ -143,6 +146,8 @@ void output_rules(
 }
 
 struct context {
+    std::string                     program;
+    std::string                     input_filename;
     std::string                     pre_block;
     std::string                     post_block;
     indexed_table<grammar_rule>     rules;
@@ -153,6 +158,9 @@ struct context {
     indexed_table<std::string>      strings;
     indexed_table<std::string>      code_blocks;
 
+    context(const std::string& program, const std::string& input_filename)
+        : program(program), input_filename(input_filename) {}
+
     void initial() {
         lrhs.add(grammar_rhs{});
     }
@@ -162,8 +170,8 @@ struct context {
 };
 
 void func_rules(context* ctxt, int* first, int* last, int* out) {
-    std::cout << "Output rules\n";
-    //std::cout << "* This file is generated from " << argv[1] << " by " << argv[0] << ", do not edit. */\n";
+    std::cout << "// Output rules\n";
+    std::cout << "/* This file is generated from " << ctxt->input_filename << " by " << ctxt->program << ", do not edit. */\n";
     std::cout << ctxt->pre_block << "\n";
     output_rules(ctxt->rules, ctxt->names, ctxt->names_names, ctxt->code_blocks, ctxt->strings, ctxt->token_rules);
     std::cout << ctxt->post_block << "\n";
@@ -369,7 +377,7 @@ int main(int argc, char** argv)
 
     marpa::recognizer r{g};
 
-    context ctxt;
+    context ctxt{argv[0], argv[1]};
 
     /* READ TOKENS */
     std::string input;

@@ -8,6 +8,7 @@
 #include "marpa-cpp/marpa.hpp"
 #include "symbol_table.h"
 #include "error.h"
+#include "evaluator.h"
 
 using namespace marpa;
 

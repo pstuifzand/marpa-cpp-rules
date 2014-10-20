@@ -1,31 +1,33 @@
 CXXFLAGS=-std=c++11 -g
 CXXLDFLAGS=-lstdc++ -g libmarpa.a
 
+REFORMATCXX=clang-format-3.4 -style=WebKit
+
 all: rules rules2 rules3 testmarpa testmarpa2 calc calctree comma literal diff balanced
 
-test.cpp: rules2 marpa.txt
-	./rules2 marpa.txt > $@
+test.cpp: rules3 marpa.txt
+	./rules3 marpa.txt | $(REFORMATCXX) > $@
 
 test2.cpp: testmarpa marpa.txt
-	./testmarpa marpa.txt > $@
+	./testmarpa marpa.txt | $(REFORMATCXX) > $@
 
 calc.cpp: testmarpa calc.txt
-	./testmarpa calc.txt > $@
+	./testmarpa calc.txt | $(REFORMATCXX) > $@
 
 calctree.cpp: testmarpa calctree.txt
-	./testmarpa calctree.txt > $@
+	./testmarpa calctree.txt | $(REFORMATCXX) > $@
 
 comma.cpp: testmarpa comma.txt
-	./testmarpa comma.txt > $@
+	./testmarpa comma.txt | $(REFORMATCXX) > $@
 
 literal.cpp: testmarpa literal.txt
-	./testmarpa literal.txt > $@
+	./testmarpa literal.txt | $(REFORMATCXX) > $@
 
 balanced.cpp: testmarpa balanced.txt
-	./testmarpa balanced.txt > $@
+	./testmarpa balanced.txt | $(REFORMATCXX) > $@
 
 diff.cpp: testmarpa diff.txt
-	./testmarpa diff.txt > $@
+	./testmarpa diff.txt | $(REFORMATCXX) > $@
 
 testmarpa: test.cpp errors.cpp read_file.o
 	gcc test.cpp errors.cpp read_file.o -o $@ $(CXXLDFLAGS) $(CXXFLAGS)

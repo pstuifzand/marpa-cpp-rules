@@ -67,18 +67,65 @@ void show(T& t, I first, I last) {
     }
 }
 
-tree<node> parse_tree;
+template <class T>
+void show2(T& t)
+{
+    if (t.type == T_OP)
+        std::cout << op_names[t.val];
+    if (t.type == T_VAL)
+        std::cout << t.val;
+    std::cout << "\n";
+}
+
+template <class T, class I>
+void show2(T& t, I f, I l) {
+    while (f != l) {
+        for (int i = 0; i < t.depth(f); ++i) std::cout << "  ";
+        show2(*f);
+        ++f;
+    }
+}
+
+tree<node> parse_tree{make_node(T_TOP, 0)};
 
 %%
 
-expr   ::= term                   {{ show(parse_tree, parse_tree.begin(), parse_tree.end()); }}
+expr   ::= term                   {{ }}
 
-term   ::= term add term          {{ $$ = $0 + $2; }}
-term   ::= term sub term          {{ $$ = $0 - $2; }}
-term   ::= factor                 {{ $$ = $0; }}
+term   ::= term add term          {{
+                                     auto it = parse_tree.insert_after(parse_tree.begin(), make_node(T_OP, OP_PLUS));
+                                     auto sf = parse_tree.end(parse_tree.begin());
+                                     auto sl = sf;
+                                     sf--; sf--;
+                                     parse_tree.reparent(it, sf, sl);
+                                     parse_tree.append_child(parse_tree.begin(), it);
+                                     parse_tree.erase(it);
+                                  }}
 
-factor ::= factor mul factor      {{ $$ = $0 * $2; }}
-factor ::= number                 {{ $$ = $0; }}
+term   ::= term sub term          {{
+                                     auto it = parse_tree.insert_after(parse_tree.begin(), make_node(T_OP, OP_MIN));
+                                     auto sf = parse_tree.end(parse_tree.begin());
+                                     auto sl = sf;
+                                     sf--; sf--;
+                                     parse_tree.reparent(it, sf, sl);
+                                     parse_tree.append_child(parse_tree.begin(), it);
+                                     parse_tree.erase(it);
+                                  }}
+
+term   ::= factor                 {{  }}
+
+factor ::= factor mul factor      {{
+                                     auto it = parse_tree.insert_after(parse_tree.begin(), make_node(T_OP, OP_MUL));
+                                     auto sf = parse_tree.end(parse_tree.begin());
+                                     auto sl = sf;
+                                     sf--; sf--;
+                                     parse_tree.reparent(it, sf, sl);
+                                     parse_tree.append_child(parse_tree.begin(), it);
+                                     parse_tree.erase(it);
+                                  }}
+
+factor ::= number                 {{ parse_tree.append_child(parse_tree.begin(), $0); }}
+factor ::= LB expr RB             {{  }}
 
 %%
 
@@ -118,11 +165,10 @@ int main(int argc, char** argv) {
             r.read(R_mul, 0, 1);
             it++;
         }
-        /*
         else if (*it == '(' || *it == ')') {
-            r.read(*it == '(' ? T_LB : T_RB, 0, 1);
+            r.read(*it == '(' ? R_LB : R_RB, 0, 1);
             it++;
-        }*/
+        }
     }
 
     marpa::bocage b{r, r.latest_earley_set()};
@@ -134,13 +180,16 @@ int main(int argc, char** argv) {
     marpa::order o{b};
     marpa::tree t{o};
 
-
     /* Evaluate trees */
     while (t.next() >= 0) {
+        std::cout << "Evaluation =================\n";
+        parse_tree.clear();
+        parse_tree.set_head(make_node(T_TOP, 0));
+
         marpa::value v{t};
         g.set_valued_rules(v);
 
-        std::vector<int> stack;
+        std::vector<node> stack;
         stack.resize(128);
 
         for (;;) {
@@ -152,9 +201,7 @@ int main(int argc, char** argv) {
                     break;
                 case MARPA_STEP_TOKEN: {
                     stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
-
-                    stack[v.result()] = v.token_value();
-
+                    stack[v.result()] = make_node(T_VAL, v.token_value());
                     break;
                 }
                 case MARPA_STEP_RULE: {
@@ -168,7 +215,7 @@ int main(int argc, char** argv) {
                 }
                 case MARPA_STEP_NULLING_SYMBOL: {
                     int res    = v.result();
-                    stack[res] = v.token_value(); 
+                    //stack[res] = v.token_value(); 
                     break;
                 }
                 case MARPA_STEP_INACTIVE:
@@ -176,5 +223,6 @@ int main(int argc, char** argv) {
             }
         }
         END: ;
+        show2(parse_tree, parse_tree.begin(), parse_tree.end()); 
     }
 }

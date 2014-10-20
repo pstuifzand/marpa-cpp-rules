@@ -130,11 +130,15 @@ void output_rules(
     }
 
     cout << "}\n";
+
+    cout << "typedef std::vector<std::tuple<std::string, marpa::grammar::symbol_id, int>> token_list;\n";
     
-    cout << "void create_tokens(std::vector<std::tuple<std::string, marpa::grammar::symbol_id, int>>& tokens) {\n";
+    cout << "token_list create_tokens() {\n";
+    cout << "    token_list tokens;\n";
     for (token_rule r : token_rules) {
         cout << "\ttokens.emplace_back(\"" << strings[r.str] << "\", R_" << names[r.lhs] << ", 0);\n";
     }
+    cout << "return tokens;\n";
     cout << "}\n";
 
 
