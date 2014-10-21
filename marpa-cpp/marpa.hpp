@@ -25,11 +25,13 @@ class grammar {
         grammar() : handle(marpa_g_new(0)) {}
         grammar(const grammar& g) {
             marpa_g_ref(g.handle);
+            marpa_g_unref(this->handle);
             this->handle = g.handle;
         }
 
         grammar& operator=(const grammar& g) {
             marpa_g_ref(g.handle);
+            marpa_g_unref(this->handle);
             this->handle = g.handle;
             return *this;
         }
@@ -143,9 +145,9 @@ class recognizer {
             return earleme_complete();
         }
 
+        recognizer& operator=(const recognizer&) = delete;
+        recognizer(const recognizer&) = delete;
     private:
-        recognizer& operator=(const recognizer&);
-        recognizer(const recognizer&);
 };
 
 
@@ -158,9 +160,10 @@ class bocage {
     public:
         bocage(recognizer& r, recognizer::earley_set_id set_id) : handle(marpa_b_new(r.internal_handle(), set_id)) {}
         ~bocage() { marpa_b_unref(handle); }
+
+        bocage& operator=(const bocage&) = delete;
+        bocage(const bocage&) = delete;
     private:
-        bocage& operator=(const bocage&);
-        bocage(const bocage&);
 };
 
 class order {
@@ -172,10 +175,10 @@ class order {
     public:
         order(bocage& b) : handle(marpa_o_new(b.internal_handle())) {}
         ~order() { marpa_o_unref(handle); }
+
+        order& operator=(const order&) = delete;
+        order(const order&) = delete;
     private:
-    private:
-        order& operator=(const order&);
-        order(const order&);
 };
 
 class tree {
@@ -189,9 +192,10 @@ class tree {
         ~tree() { marpa_t_unref(handle); }
 
         inline int next() { return marpa_t_next(handle); }
+
+        tree& operator=(const tree&) = delete;
+        tree(const tree&) = delete;
     private:
-        tree& operator=(const tree&);
-        tree(const tree&);
 };
 
 class value {
@@ -218,9 +222,11 @@ class value {
         inline int rule() { return marpa_v_rule(handle); }
         inline grammar::symbol_id symbol() { return marpa_v_symbol(handle); }
         inline grammar::symbol_id token() { return marpa_v_token(handle); }
+
+        value& operator=(const value&) = delete;
+        value(const value&) = delete;
+
     private:
-        value& operator=(const value&);
-        value(const value&);
 };
 
 class event {
