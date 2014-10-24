@@ -3,7 +3,7 @@ CXXLDFLAGS=-lstdc++ -g libmarpa.a
 
 REFORMATCXX=clang-format-3.4 -style=WebKit
 
-all: rules rules2 rules3 testmarpa testmarpa2 calc calctree comma literal diff balanced
+all: rules rules2 rules3 testmarpa testmarpa2 calc calctree comma literal diff balanced template-test
 
 test.cpp: rules3 marpa.txt
 	./rules3 marpa.txt | $(REFORMATCXX) > $@
@@ -29,6 +29,9 @@ balanced.cpp: testmarpa balanced.txt
 diff.cpp: testmarpa diff.txt
 	./testmarpa diff.txt | $(REFORMATCXX) > $@
 
+template.cpp: testmarpa template.txt
+	./testmarpa template.txt | $(REFORMATCXX) > $@
+
 testmarpa: test.cpp errors.cpp read_file.o
 	gcc test.cpp errors.cpp read_file.o -o $@ $(CXXLDFLAGS) $(CXXFLAGS)
 
@@ -53,11 +56,17 @@ balanced: balanced.cpp errors.cpp read_file.o
 diff: diff.cpp errors.cpp
 	gcc $^ -o $@ $(CXXLDFLAGS) $(CXXFLAGS)
 
+template: template.cpp errors.cpp read_file.o
+	gcc -g $^ -o $@ $(CXXLDFLAGS) $(CXXFLAGS)
+
+template-test: template
+	./template t/template/01_template.tt
+
 clean:
 	rm -f errors.o rules.o rules2.o rules3.o read_file.o
-	rm -f comma.o literal.o diff.o balanced.o
-	rm -f test.cpp test2.cpp calc.cpp calctree.cpp diff.cpp literal.cpp comma.cpp balanced.cpp
-	rm -f rules rules2 rules3 testmarpa testmarpa2 calc calctree literal diff comma balanced
+	rm -f comma.o literal.o diff.o balanced.o template.o
+	rm -f test.cpp test2.cpp calc.cpp calctree.cpp diff.cpp literal.cpp comma.cpp balanced.cpp template.cpp
+	rm -f rules rules2 rules3 testmarpa testmarpa2 calc calctree literal diff comma balanced template
 
 read_file.o: read_file.cpp
 	gcc -c -o $@ $< -std=c++11 -Wall -g -lstdc++

@@ -154,6 +154,11 @@ void output_rules(
     cout << "}\n";
 }
 
+bool isidentifier(char c)
+{
+    return isalnum(c) || c == '_';
+}
+
 int main(int argc, char** argv)
 {
     marpa::grammar g;
@@ -241,9 +246,9 @@ int main(int argc, char** argv)
             continue;
         }
 
-        if (isalpha(*it)) {
+        if (isalpha(*it) || *it == '_') {
             auto begin = it;
-            it = std::find_if_not(begin, sep_pos, isalpha);
+            it = std::find_if_not(begin, sep_pos, isidentifier);
             std::string id(begin, it);
             int idx = names.add(id);
             r.read(T_name, idx, 1);

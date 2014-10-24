@@ -22,6 +22,18 @@ std::pair<I, N> parse_digit(I first, I last, N base, typename std::iterator_trai
 }
 
 template <typename I>
+I parse_ident(I first, I last)
+{
+    if (first == last) return first;
+    if (!(isalpha(*first) || *first == '_'))  return first;
+    ++first;
+    while (isalnum(*first) || *first == '_') {
+        ++first;
+    }
+    return first;
+}
+
+template <typename I>
 I match(I first, I last, I s_first, I s_last) {
     auto p = std::mismatch(first, last, s_first);
     if (p.second == s_last) {
