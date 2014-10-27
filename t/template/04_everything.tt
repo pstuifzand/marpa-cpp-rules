@@ -1,0 +1,13 @@
+hello world {{var}}xxx{{var}}
+
+{{for x in last}}
+    {{if var}}
+        xxx
+        {{if var2}}
+            xxx2
+        {{end}}
+        {{if var3}}
+            xxx2
+        {{end}}
+    {{end}} test test test
+{{end}}
