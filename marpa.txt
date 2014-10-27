@@ -12,7 +12,7 @@
 
 struct grammar_rhs {
     int names_names_idx;
-    int min; // 0 == *, 1 == +, 2 == names_names_idx
+    int min; // 1 == *, 2 == +, 3 == names_names_idx
     int sep;
     friend bool operator==(const grammar_rhs& a, const grammar_rhs& b);
 };
@@ -88,7 +88,7 @@ void output_rules(
     }
     
     for (auto rule : rules) {
-        if (rule.rhs.min == 2) {
+        if (rule.rhs.min == 3) {
             cout << "\trule rule_id_" << names[rule.lhs] << "_" << rule.lhs_count << ";\n";
         }
         else {
@@ -99,7 +99,15 @@ void output_rules(
     for (auto name : names) {
         cout << "\tmarpa::grammar::symbol_id R_" << std::setw(6) << std::left << name << ";\n";
     }
+
     cout << "\n\n";
+
+
+    cout << "const char* token_names[] = {\n";
+    for (auto name : names) {
+        cout << "\t\"" << name << "\",\n";
+    }
+    cout << "\n};\n\n";
 
     // generate grammar
     cout << "void create_grammar(marpa::grammar& g) {\n";
@@ -108,7 +116,7 @@ void output_rules(
     }
 
     for (auto rule : rules) {
-        if (rule.rhs.min == 2) {
+        if (rule.rhs.min == 3) {
             cout << "\trule_id_" << names[rule.lhs] << "_" << rule.lhs_count << "  = g.add_rule(R_" << names[rule.lhs] << ", {";
             for (auto j : names_names[rule.rhs.names_names_idx]) {
                 cout << "R_" << names[j] << ", ";
@@ -123,10 +131,10 @@ void output_rules(
                 cout << "R_" << names[rule.rhs.sep];
             }
 
-            cout << ", " << rule.rhs.min << ", 0);\n";
+            cout << ", " << rule.rhs.min-1 << ", 0);\n";
         }
     }
-    cout << "\tg.start_symbol(R_" << names[0] << ");\n";
+    cout << "\tg.start_symbol(R_" << names[1] << ");\n";
 
     const char* lines[] = {
         "if (g.precompute() < 0) {\t",
@@ -148,7 +156,7 @@ void output_rules(
     cout << "token_list create_tokens() {\n";
     cout << "    token_list tokens;\n";
     for (token_rule r : token_rules) {
-        cout << "\ttokens.emplace_back(\"" << strings[r.str] << "\", R_" << names[r.lhs] << ", 0);\n";
+        cout << "\ttokens.emplace_back(\"" << strings[r.str] << "\", R_" << names[r.lhs] << ", 1);\n";
     }
     cout << "return tokens;\n";
     cout << "}\n";
@@ -178,7 +186,7 @@ void output_rules(
         if (not_first) cout << "\telse ";
 
         cout << "\tif (rule_id == rule_id_" << names[rule.lhs];
-        if (rule.rhs.min == 2) {
+        if (rule.rhs.min == 3) {
             cout << "_" << rule.lhs_count;
         }
         cout << ") {\n";
@@ -213,21 +221,21 @@ NULL    ~ "null"
 STAR    ~ "*"
 PLUS    ~ "+"
 
-rule  ::= lhs BNF rhs        {{ rules.add(grammar_rule{$0, lrhs[$2], 0}); }}
+rule  ::= lhs BNF rhs        {{ rules.add(grammar_rule{$0, lrhs[$2], 1}); }}
 rule  ::= lhs BNF rhs code   {{ rules.add(grammar_rule{$0, lrhs[$2], $3}); }}
 rule  ::= lhs STROP string   {{ token_rules.add(token_rule{$0, $2}); }}
 
 lhs   ::= name               {{ $$ = $0; }}
 
-rhs   ::= names              {{ $$ = lrhs.add(grammar_rhs{$0, 2, -1}); }}
+rhs   ::= names              {{ $$ = lrhs.add(grammar_rhs{$0, 3, -1}); }}
 rhs   ::= name min           {{ $$ = lrhs.add(grammar_rhs{$0, $1, -1}); }}
 rhs   ::= name min name      {{ $$ = lrhs.add(grammar_rhs{$0, $1, $2}); }}
-rhs   ::= NULL               {{ $$ = 0; }}
+rhs   ::= NULL               {{ $$ = 1; }}
 
 names ::= name+              {{ std::vector<int> nms{ &$0, &$N }; $$ = names_names.add(nms); }}
 
-min   ::= STAR               {{ $$ = 0; }}
-min   ::= PLUS               {{ $$ = 1; }}
+min   ::= STAR               {{ $$ = 1; }}
+min   ::= PLUS               {{ $$ = 2; }}
 
 %%
 
@@ -236,6 +244,7 @@ int main(int argc, char** argv) {
     strings.add(""); // empty string
     code_blocks.add(""); // empty code block
     lrhs.add(grammar_rhs{});
+    names_names.add(std::vector<int>{});
 
     marpa::grammar g;
     create_grammar(g);
@@ -349,22 +358,22 @@ int main(int argc, char** argv) {
         g.set_valued_rules(v);
 
         std::vector<int> stack;
-        stack.resize(128);
+        stack.resize(1024*8);
 
         for (;;) {
             marpa::value::step_type type = v.step();
 
             switch (type) {
                 case MARPA_STEP_INITIAL:
-                    stack.resize(1);
+                    //stack.resize(1);
                     break;
                 case MARPA_STEP_TOKEN: {
-                    stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
+                    //stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
                     stack[v.result()] = v.token_value();
                     break;
                 }
                 case MARPA_STEP_RULE: {
-                    stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
+                    //stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
 
                     /* BEGIN OF RULE SEMANTICS */
                     evaluate_rules(g, r, v, stack);

@@ -9,11 +9,15 @@
 #include "symbol_table.h"
 #include "error.h"
 #include "read_file.h"
-#include "tree.hh"
+#include "stlplus3.hpp"
 
-const int T_TOP = 1;
+using namespace stlplus;
+
+const int T_BLOCK = 1;
 const int T_VAL = 2;
 const int T_LIT = 3;
+const int T_IF  = 4;
+const int T_FOR = 5;
 
 struct node {
     int type;
@@ -31,42 +35,97 @@ template <class T>
 void show2(T& t)
 {
     if (t.type == T_VAL)
-        std::cout << "var(" << varnames[t.val] << ")";
+        std::cerr << "var(" << varnames[t.val] << ")";
     if (t.type == T_LIT)
-        std::cout << R"foo(literal(")foo" << literals[t.val] << R"("))";
-    std::cout << "\n";
+        std::cerr << R"foo(literal(")foo" << literals[t.val] << R"("))";
+    if (t.type == T_IF)
+        std::cerr << "IF";
+    if (t.type == T_FOR)
+        std::cerr << "FOR";
+    if (t.type == T_BLOCK)
+        std::cerr << "BLOCK";
+    std::cerr << "\n";
 }
 
 template <class T, class I>
 void show2(T& t, I f, I l) {
     while (f != l) {
-        for (int i = 0; i < t.depth(f); ++i) std::cout << "  ";
+        for (int i = 0; i < t.depth(f.simplify())-1; ++i) std::cerr << "  ";
         show2(*f);
         ++f;
     }
+    std::cerr << "===========================\n";
 }
 
-tree<node> parse_tree{make_node(T_TOP, 0)};
+//tree<node> parse_tree{make_node(T_BLOCK, 0)};
+
+typedef typename stlplus::ntree<node>::iterator tree_iterator;
+
+stlplus::ntree<node> parse_tree{};
 
 %%
 
-template ::= part+
+template ::= part*                              {{
+            auto first = &$0;
+            auto last = &$N;
+            auto it = parse_tree.insert(parse_tree.root(), make_node(T_BLOCK, 0));
+            while (first != last) {
+                auto x = parse_tree.cut(first->iterator);
+                parse_tree.insert(it, x);
+                ++first;
+            }
+            $$.iterator = it;
+        }}
 
-part     ::= tag                                {{ parse_tree.append_child(parse_tree.begin(), make_node(T_VAL, $0)); }}
-part     ::= literal                            {{ parse_tree.append_child(parse_tree.begin(), make_node(T_LIT, $0)); }}
+part ::= TB name TE                         {{ 
+        $$.iterator = parse_tree.insert(parse_tree.root(), make_node(T_VAL, $1.token_value));
+        show2(parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end()); 
+    }}
 
-tag      ::= tb name te                         {{ $$ = $1; }}
-tag      ::= tb if name te template tb end te
-tag      ::= tb for name in name te template tb end te
+part ::= LITERAL                            {{ 
+        $$.iterator = parse_tree.insert(parse_tree.root(), make_node(T_LIT, $0.token_value)); 
+        show2(parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end()); 
+    }}
+
+part ::= TB IF NAME TE template TB END TE   {{
+        auto n    = make_node(T_VAL, $2.token_value);
+        auto n_if = make_node(T_IF, 0);
+        stlplus::ntree<node> t = parse_tree.cut($4.iterator);
+        auto it = parse_tree.insert(parse_tree.root(), n_if);
+        parse_tree.insert(it, 0, n);
+        parse_tree.insert(it, 1, t);
+        $$.iterator = it;
+        show2(parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end()); 
+    }}
+
+part ::= TB FOR NAME IN NAME TE template TB END TE  {{
+        auto x    = make_node(T_VAL, $2.token_value);
+        auto n    = make_node(T_VAL, $4.token_value);
+        auto n_for = make_node(T_FOR, 0);
+        stlplus::ntree<node> t = parse_tree.cut($6.iterator);
+        auto it = parse_tree.insert(parse_tree.root(), n_for);
+        parse_tree.insert(it, 0, x);
+        parse_tree.insert(it, 1, n);
+        parse_tree.insert(it, 2, t);
+        $$.iterator = it;
+        show2(parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end()); 
+    }}
 
 %%
+
+template <class Re>
+void read(Re& re, marpa::grammar::symbol_id s, int id, int l) {
+    re.read(s, id, l);
+}
 
 template <class R, class I>
 I read_varname(R& re, I first, I last) {
     auto end = parse_ident(first, last);
+    if (end == first)
+        return first;
     std::string varname{first, end};
     int l = varnames.add(varname);
-    re.read(R_name, l, 1);
+    read(re, R_name, l, 1);
     return end;
 }
 
@@ -82,8 +141,24 @@ int main(int argc, char** argv) {
 
     marpa::recognizer r(g);
 
+    int l = literals.add("test");
+    int v = varnames.add("x");
+
+    read(r, R_TB, 1, 1);
+    read(r, R_FOR, 1, 1);
+    read(r, R_NAME, v, 1);
+    read(r, R_IN, 1, 1);
+    read(r, R_NAME, v, 1);
+    read(r, R_TE, 1, 1);
+    read(r, R_LITERAL, l, 1);
+    read(r, R_TB, 1, 1);
+    read(r, R_END, 1, 1);
+    read(r, R_TE, 1, 1);
+
+/*
+
     if (argc != 2) {
-        std::cout << "Usage: " << argv[0] << " string-input\n";
+        std::cerr << "Usage: " << argv[0] << " string-input\n";
         return 1;
     }
 
@@ -97,13 +172,20 @@ int main(int argc, char** argv) {
     std::string tag_begin{"{{"};
     std::string tag_end{"}}"};
 
+    std::vector<std::tuple<std::string, marpa::grammar::symbol_id, int>> tokens{
+        std::make_tuple("for", R_for, 1),
+        std::make_tuple("end", R_end, 1),
+        std::make_tuple("if",  R_if,  1),
+        std::make_tuple("in",  R_in,  1),
+    };
+
     while (it != input.end()) {
         if (literal) {
             auto end = read_tag(it, input.end(), 
                 std::begin(tag_begin), std::end(tag_begin));
 
             if (it != end) {
-                r.read(R_tb, 0, 1);
+                read(r, R_tb, 0, 1);
                 literal = false;
                 it = end;
                 continue;
@@ -114,31 +196,56 @@ int main(int argc, char** argv) {
 
             if (literal_start != literal_end) {
                 std::string literal{literal_start, literal_end};
-                int l = literals.add(literal);
-                r.read(R_literal, l, 1);
+                //literal.erase(std::remove(std::begin(literal), std::end(literal), '\n'), std::end(literal));
+                //literal.erase(std::remove(std::begin(literal), std::end(literal), ' '), std::end(literal));
+                if (literal.size() != 0)  {
+                    int l = literals.add(literal);
+                    //std::cerr << "reading literal[" << literal << "]\n";
+                    read(r, R_literal, l, 1);
+                }
                 it = literal_end;
             }
         } else {
             while (isspace(*it)) ++it;
 
-            it = read_varname(r, it, input.end());
+            bool found = false;
+            for (auto t : tokens) {
+                auto new_it = match(it, input.end(), std::get<0>(t).begin(), std::get<0>(t).end());
+                if (new_it != it) {
+                    read(r, std::get<1>(t), std::get<2>(t), 1);
+                    it = new_it;
+                    found = true;
+                    break;
+                }
+            }
+            if (found) continue;
 
-            while (isspace(*it)) ++it;
-
+            auto ne = read_varname(r, it, input.end());
+            if (ne != it) {
+                it = ne;
+                continue;
+            }
             auto end = read_tag(it, input.end(),
                     std::begin(tag_end), std::end(tag_end));
             if (it != end) {
-                r.read(R_te, 0, 1);
+                read(r, R_TE, 0, 1);
                 it = end;
             }
-
             literal = true;
         }
     }
+    */
+
+    if (!r.internal_handle()) {
+        std::cerr << "erro\n";
+        std::cerr << marpa_errors[g.error()] << "\n";
+        return 1;
+    }
 
     marpa::bocage b{r, r.latest_earley_set()};
+
     if (g.error() != MARPA_ERR_NONE) {
-        std::cout << marpa_errors[g.error()] << "\n";
+        std::cerr << marpa_errors[g.error()] << "\n";
         return 1;
     }
 
@@ -147,14 +254,18 @@ int main(int argc, char** argv) {
 
     /* Evaluate trees */
     while (t.next() >= 0) {
-        std::cout << "Evaluation =================\n";
-        parse_tree.clear();
-        parse_tree.set_head(make_node(T_TOP, 0));
+        std::cerr << "Evaluation =================\n";
+        parse_tree.insert(make_node(T_BLOCK, 0));
 
         marpa::value v{t};
         g.set_valued_rules(v);
 
-        std::vector<int> stack;
+        struct stack_item {
+            tree_iterator iterator;
+            int           token_value;
+        };
+
+        std::vector<stack_item> stack;
         stack.resize(128);
 
         for (;;) {
@@ -166,7 +277,7 @@ int main(int argc, char** argv) {
                     break;
                 case MARPA_STEP_TOKEN: {
                     stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
-                    stack[v.result()] = v.token_value();
+                    stack[v.result()].token_value = v.token_value();
                     break;
                 }
                 case MARPA_STEP_RULE: {
@@ -188,7 +299,7 @@ int main(int argc, char** argv) {
             }
         }
         END: ;
-        show2(parse_tree, parse_tree.begin(), parse_tree.end()); 
+        show2(parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end()); 
     }
 }
 

@@ -11,12 +11,12 @@ class indexed_table {
             auto it = std::find(symbols.begin(), symbols.end(), v);
             if (it == symbols.end()) {
                 symbols.push_back(v);
-                return symbols.size()-1;
+                return symbols.size();
             }
-            return std::distance(symbols.begin(), it);
+            return std::distance(symbols.begin(), it) + 1;
         }
         const T& operator[](int idx) const {
-            return symbols[idx];
+            return symbols[idx-1];
         }
 
         iterator begin() { return symbols.begin(); }

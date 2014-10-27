@@ -24,7 +24,7 @@ hello ~ "hello"
 world ~ "world"
 
 ws    ::= sp
-sp      ~ " "
+sp     ~ " "
 
 %%
 

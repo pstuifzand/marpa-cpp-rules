@@ -3,7 +3,7 @@
 
 struct grammar_rhs {
     int names_names_idx;
-    int min; // 0 == *, 1 == +, 2 == names_names_idx
+    int min; // 1 == *, 2 == +, 3 == names_names_idx
     int sep;
     friend bool operator==(const grammar_rhs& a, const grammar_rhs& b);
 };

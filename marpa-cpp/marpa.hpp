@@ -3,7 +3,7 @@
 
 extern "C" {
 #include <marpa.h>
-#include <marpa_api.h>
+//#include <marpa_api.h>
 }
 
 namespace marpa {
@@ -137,11 +137,13 @@ class recognizer {
         }
 
         int read(grammar::symbol_id sym_id, int value, int length) {
+            if (value == 0) {
+                throw "value == 0";
+            }
             int error = alternative(sym_id, value, length);
             if (error != MARPA_ERR_NONE) {
                 return error;
             }
-            //std::cout << sym_id << " " << value << " " << length << "\n";
             return earleme_complete();
         }
 
@@ -159,7 +161,7 @@ class bocage {
         inline handle_type internal_handle() { return handle; }
     public:
         bocage(recognizer& r, recognizer::earley_set_id set_id) : handle(marpa_b_new(r.internal_handle(), set_id)) {}
-        ~bocage() { marpa_b_unref(handle); }
+        ~bocage() { if (handle) marpa_b_unref(handle); }
 
         bocage& operator=(const bocage&) = delete;
         bocage(const bocage&) = delete;

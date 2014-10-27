@@ -1,0 +1,10 @@
+x
+{{if var}}
+    xxx
+    {{if var2}}
+        xxx2
+    {{end}}
+    {{if var3}}
+        xxx2
+    {{end}}
+{{end}}

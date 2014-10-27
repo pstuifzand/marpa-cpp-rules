@@ -12,7 +12,7 @@
 
 struct grammar_rhs {
     int names_names_idx;
-    int min; // 0 == *, 1 == +, 2 == names_names_idx
+    int min; // 1 == *, 2 == +, 3 == names_names_idx
     int sep;
     friend bool operator==(const grammar_rhs& a, const grammar_rhs& b);
 };
@@ -83,7 +83,7 @@ void output_rules(
     }
     
     for (auto rule : rules) {
-        if (rule.rhs.min == 2) {
+        if (rule.rhs.min == 3) {
             cout << "\trule rule_id_" << names[rule.lhs] << "_" << rule.lhs_count << ";\n";
         }
         else {
@@ -103,7 +103,7 @@ void output_rules(
     }
 
     for (auto rule : rules) {
-        if (rule.rhs.min == 2) {
+        if (rule.rhs.min == 3) {
             cout << "\trule_id_" << names[rule.lhs] << "_" << rule.lhs_count << "  = g.add_rule(R_" << names[rule.lhs] << ", {";
             for (auto j : names_names[rule.rhs.names_names_idx]) {
                 cout << "R_" << names[j] << ", ";
@@ -111,10 +111,10 @@ void output_rules(
             cout << "});\n";
         }
         else {
-            cout << "\trule_id_" << names[rule.lhs] << " = g.new_sequence(R_" << names[rule.lhs] << ", R_" << names[rule.rhs.names_names_idx] << ", " << rule.rhs.sep << ", " << rule.rhs.min << ", 0);\n";
+            cout << "\trule_id_" << names[rule.lhs] << " = g.new_sequence(R_" << names[rule.lhs] << ", R_" << names[rule.rhs.names_names_idx] << ", " << rule.rhs.sep << ", " << rule.rhs.min-1 << ", 0);\n";
         }
     }
-    cout << "\tg.start_symbol(R_" << names[0] << ");\n";
+    std::cout << "\tg.start_symbol(R_" << names[1] << ");\n";
 
     const char* lines[] = {
         "if (g.precompute() < 0) {\t",
@@ -136,7 +136,7 @@ void output_rules(
     cout << "token_list create_tokens() {\n";
     cout << "    token_list tokens;\n";
     for (token_rule r : token_rules) {
-        cout << "\ttokens.emplace_back(\"" << strings[r.str] << "\", R_" << names[r.lhs] << ", 0);\n";
+        cout << "\ttokens.emplace_back(\"" << strings[r.str] << "\", R_" << names[r.lhs] << ", 1);\n";
     }
     cout << "return tokens;\n";
     cout << "}\n";
@@ -166,7 +166,7 @@ void output_rules(
         if (not_first) cout << "\telse ";
 
         cout << "\tif (rule_id == rule_id_" << names[rule.lhs];
-        if (rule.rhs.min == 2) {
+        if (rule.rhs.min == 3) {
             cout << "_" << rule.lhs_count;
         }
         cout << ") {\n";
@@ -255,11 +255,11 @@ int main(int argc, char** argv)
     std::string post_block{ sep_pos + 2, input.end() };
 
     std::vector<std::tuple<std::string, marpa::grammar::symbol_id, int>> tokens{
-        std::make_tuple("::=",  T_bnfop, 0),
-        std::make_tuple("null", T_null,  0),
-        std::make_tuple("*",    T_min,   0),
-        std::make_tuple("+",    T_min,   1),
-        std::make_tuple("~",    T_strop, 0),
+        std::make_tuple("::=",  T_bnfop, 1),
+        std::make_tuple("null", T_null,  1),
+        std::make_tuple("*",    T_min,   1),
+        std::make_tuple("+",    T_min,   2),
+        std::make_tuple("~",    T_strop, 1),
     };
 
     while (it != sep_pos) {
@@ -373,7 +373,7 @@ int main(int argc, char** argv)
                         int lhs = stack[v.arg_0()];
                         int rhs = stack[v.arg_0()+2];
                         grammar_rhs rhs_s = lrhs[rhs];
-                        rules.add(grammar_rule{lhs, rhs_s, 0});
+                        rules.add(grammar_rule{lhs, rhs_s, 1});
                     }
                     else if (rule == rule_id_rule_1) { // lhs ::= rhs  code
                         int lhs = stack[v.arg_0()];
@@ -392,7 +392,7 @@ int main(int argc, char** argv)
                     }
                     else if (rule == rule_id_rhs_0) {  // names
                         int n = stack[v.arg_0()];
-                        stack[v.result()] = lrhs.add(grammar_rhs{n, 2, -1 });
+                        stack[v.result()] = lrhs.add(grammar_rhs{n, 3, -1 });
                     }
                     else if (rule == rule_id_rhs_1) {  // name (*|+)
                         int n = stack[v.arg_0()];
@@ -400,7 +400,7 @@ int main(int argc, char** argv)
                         stack[v.result()] = lrhs.add(grammar_rhs{n, min, -1 });
                     }
                     else if (rule == rule_id_rhs_2) {  // null
-                        stack[v.result()] = 0;
+                        stack[v.result()] = 1;
                     }
                     else if (rule == rule_id_rhs_3) {  // name (*|+) sep
                         int n = stack[v.arg_0()];

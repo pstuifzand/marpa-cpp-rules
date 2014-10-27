@@ -14,23 +14,22 @@ class evaluator {
         std::vector<value_type>    stack;
         std::vector<function_type> rule_functions;
     public:
-        evaluator() {}
+        evaluator() { stack.resize(1024*8); rule_functions.resize(128); }
         ~evaluator() {}
 
         void initial_step(context_type* context, marpa::value& v) {
-            stack.resize(1);
             context->initial();
         }
 
         void token_step(context_type* context, marpa::value& v) {
-            stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
+            //stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
             auto out = &stack[v.result()];
             *out = context->convert(v.token_value());
         }
 
         void rule_step(context_type* context, marpa::value& v) {
             marpa::grammar::rule_id rule = v.rule();
-            stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
+            //stack.resize(std::max((std::vector<int>::size_type)v.result()+1, stack.size()));
 
             auto out = &stack[v.result()];
 
@@ -51,7 +50,7 @@ class evaluator {
         }
 
         void set_rule_func(marpa::grammar::rule_id id, function_type func) {
-            rule_functions.resize(id+1);
+            //rule_functions.resize(id+1);
             rule_functions[id] = func;
         }
 

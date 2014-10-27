@@ -1,12 +1,12 @@
 CXXFLAGS=-std=c++11 -g
-CXXLDFLAGS=-lstdc++ -g libmarpa.a
+CXXLDFLAGS=-lstdc++ -g -lmarpa
 
 REFORMATCXX=clang-format-3.4 -style=WebKit
 
-all: rules rules2 rules3 testmarpa testmarpa2 calc calctree comma literal diff balanced template-test
+all: rules rules2 rules3 testmarpa testmarpa2 calc calctree comma literal diff template-test
 
-test.cpp: rules3 marpa.txt
-	./rules3 marpa.txt | $(REFORMATCXX) > $@
+test.cpp: rules2 marpa.txt
+	./rules2 marpa.txt | $(REFORMATCXX) > $@
 
 test2.cpp: testmarpa marpa.txt
 	./testmarpa marpa.txt | $(REFORMATCXX) > $@
@@ -57,10 +57,12 @@ diff: diff.cpp errors.cpp
 	gcc $^ -o $@ $(CXXLDFLAGS) $(CXXFLAGS)
 
 template: template.cpp errors.cpp read_file.o
-	gcc -g $^ -o $@ $(CXXLDFLAGS) $(CXXFLAGS)
+	gcc -g $^ -o $@ $(CXXLDFLAGS) $(CXXFLAGS) -I ~/Downloads/stlplus/source/
 
-template-test: template
+template-test: template t/template/*_template.tt
 	./template t/template/01_template.tt
+	./template t/template/02_if.tt
+	./template t/template/03_for.tt
 
 clean:
 	rm -f errors.o rules.o rules2.o rules3.o read_file.o

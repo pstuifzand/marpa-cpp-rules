@@ -44,6 +44,33 @@ void replace_variables(std::string& block, const std::string& var, const std::st
     }
 }
 
+template <class I>
+using value_type = typename I::value_type;
+
+template <class I>
+void number_rules(I first, I last) {
+    using T = value_type<I>;
+    int last_lhs   = -1;
+    int last_count = -1;
+    while (first != last) {
+        grammar_rule& rule = *first;
+        if (rule.lhs != last_lhs) {
+            last_lhs = rule.lhs;
+            last_count = -1;
+        }
+        ++last_count;
+        rule.lhs_count = last_count;
+        ++first;
+    }
+}
+
+std::string rule_name(const grammar_rule& rule, const indexed_table<std::string>& names) {
+    std::string s = "rule_id_" + names[rule.lhs];
+    if (rule.rhs.min == 3)
+        s += "_" + std::to_string(rule.lhs_count);
+    return s;
+}
+
 void output_rules(
     indexed_table<grammar_rule>& rules,
     const indexed_table<std::string>& names,
@@ -54,28 +81,10 @@ void output_rules(
 
     cout << "\tusing rule = grammar::rule_id;\n";
 
-    int last_lhs   = -1;
-    int last_count = 0;
-
-    for (auto& rule : rules) {
-        if (rule.lhs == last_lhs) {
-            ++last_count;
-            rule.lhs_count = last_count;
-        }
-        else {
-            last_lhs = rule.lhs;
-            last_count = 0;
-            rule.lhs_count = last_count;
-        }
-    }
+    number_rules(std::begin(rules), std::end(rules));
     
     for (auto rule : rules) {
-        if (rule.rhs.min == 2) {
-            cout << "\trule rule_id_" << names[rule.lhs] << "_" << rule.lhs_count << ";\n";
-        }
-        else {
-            cout << "\trule rule_id_" << names[rule.lhs] << ";\n";
-        }
+        cout << "\trule " << rule_name(rule, names) << ";\n";
     }
 
     for (auto name : names) {
@@ -90,7 +99,7 @@ void output_rules(
     }
 
     for (auto rule : rules) {
-        if (rule.rhs.min == 2) {
+        if (rule.rhs.min == 3) {
             cout << "\trule_id_" << names[rule.lhs] << "_" << rule.lhs_count << "  = g.add_rule(R_" << names[rule.lhs] << ", {";
             for (auto j : names_names[rule.rhs.names_names_idx]) {
                 cout << "R_" << names[j] << ", ";
@@ -142,7 +151,7 @@ void output_rules(
         if (not_first) cout << "\telse ";
 
         cout << "\tif (rule_id == rule_id_" << names[rule.lhs];
-        if (rule.rhs.min == 2) {
+        if (rule.rhs.min == 3) {
             cout << "_" << rule.lhs_count;
         }
         cout << ") {\n";
@@ -230,10 +239,10 @@ int main(int argc, char** argv)
     std::string post_block{ sep_pos + 2, input.end() };
 
     std::vector<std::tuple<std::string, marpa::grammar::symbol_id, int>> tokens{
-        std::make_tuple("::=",  T_bnfop, 0),
-        std::make_tuple("null", T_null,  0),
-        std::make_tuple("*",    T_min,   0),
-        std::make_tuple("+",    T_min,   1),
+        std::make_tuple("::=",  T_bnfop, 1),
+        std::make_tuple("null", T_null,  1),
+        std::make_tuple("*",    T_min,   1),
+        std::make_tuple("+",    T_min,   2),
     };
 
     while (it != sep_pos) {
@@ -336,7 +345,7 @@ int main(int argc, char** argv)
                         int lhs = stack[v.arg_0()];
                         int rhs = stack[v.arg_0()+2];
                         grammar_rhs rhs_s = lrhs[rhs];
-                        rules.add(grammar_rule{lhs, rhs_s, 0});
+                        rules.add(grammar_rule{lhs, rhs_s, 1});
                     }
                     else if (rule == rule_id_rule_1) { // lhs ::= rhs  code
                         int lhs = stack[v.arg_0()];
@@ -350,7 +359,7 @@ int main(int argc, char** argv)
                     }
                     else if (rule == rule_id_rhs_0) {  // names
                         int n = stack[v.arg_0()];
-                        stack[v.result()] = lrhs.add(grammar_rhs{n, 2, -1 });
+                        stack[v.result()] = lrhs.add(grammar_rhs{n, 3, -1 });
                     }
                     else if (rule == rule_id_rhs_1) {  // name (*|+)
                         int n = stack[v.arg_0()];
