@@ -11,3 +11,9 @@ void read_file(const std::string& filename, std::string& input) {
     }
 }
 
+std::string read_file(const std::string& filename) {
+    std::string input;
+    read_file(filename, input);
+    return input;
+}
+
