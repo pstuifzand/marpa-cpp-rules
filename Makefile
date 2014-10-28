@@ -3,7 +3,7 @@ CXXLDFLAGS=-lstdc++ -g -lmarpa
 
 REFORMATCXX=clang-format-3.4 -style=WebKit
 
-all: rules rules2 rules3 testmarpa testmarpa2 calc calctree comma literal diff template-test
+all: rules rules2 rules3 testmarpa testmarpa2 calc calctree comma literal diff template-test balanced
 
 test.cpp: rules2 marpa.txt
 	./rules2 marpa.txt | $(REFORMATCXX) > $@

@@ -243,7 +243,7 @@ int main(int argc, char** argv) {
 
     strings.add(""); // empty string
     code_blocks.add(""); // empty code block
-    lrhs.add(grammar_rhs{});
+    lrhs.add(grammar_rhs{1, 3, -1});
     names_names.add(std::vector<int>{});
 
     marpa::grammar g;
