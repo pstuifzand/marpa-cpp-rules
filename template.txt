@@ -13,11 +13,15 @@
 
 using namespace stlplus;
 
-const int T_BLOCK = 1;
-const int T_VAL = 2;
-const int T_LIT = 3;
-const int T_IF  = 4;
-const int T_FOR = 5;
+enum {
+    T_BLOCK = 1,
+    T_VAL,
+    T_LIT,
+    T_IF,
+    T_FOR,
+};
+
+const bool VERBOSE = false;
 
 struct node {
     int type;
@@ -48,6 +52,12 @@ void show2(T& t)
 }
 
 template <class T, class I>
+void show(const char* stage, T& t, I f, I l) {
+    std::cerr << "Stage = " << stage << "\n";
+    show2(t, f, l);
+}
+
+template <class T, class I>
 void show2(T& t, I f, I l) {
     while (f != l) {
         for (int i = 0; i < t.depth(f.simplify())-1; ++i) std::cerr << "  ";
@@ -63,53 +73,108 @@ typedef typename stlplus::ntree<node>::iterator tree_iterator;
 
 stlplus::ntree<node> parse_tree{};
 
+/*
+template <typename T, typename I, typename N>
+I add_node(T& t, I root, N p)
+{
+    return t.insert(root, p);
+}*/
+
+template <typename T, typename I>
+I add_node(T& t, I root, const node& p)
+{
+    return t.insert(root, p);
+}
+
+template <typename T, typename I>
+I add_node(T& t, I root, stlplus::ntree<node>& p)
+{
+    return t.move(root, p);
+}
+
+template <typename T, typename I, typename Np, typename Na>
+I add_node(T& t, I root, Np p, Na a)
+{
+    I it = t.insert(root, p);
+    add_node(t, it, a);
+    return it;
+}
+
+template <typename T, typename I, typename Np, typename Na, typename Nb>
+I add_node(T& t, I root, Np p, Na a, Nb b)
+{
+    I it = t.insert(root, p);
+    add_node(t, it, a);
+    add_node(t, it, b);
+    return it;
+}
+
+template <typename T, typename I, typename Np, typename Na, typename Nb, typename Nc>
+I add_node(T& t, I root, Np p, Na a, Nb b, Nc c)
+{
+    I it = t.insert(root, p);
+    add_node(t, it, a);
+    add_node(t, it, b);
+    add_node(t, it, c);
+    return it;
+}
+
 %%
 
 template ::= part*                              {{
-            auto first = &$0;
-            auto last = &$N;
-            auto it = parse_tree.insert(parse_tree.root(), make_node(T_BLOCK, 0));
-            while (first != last) {
-                auto x = parse_tree.cut(first->iterator);
-                parse_tree.insert(it, x);
-                ++first;
-            }
-            $$.iterator = it;
-        }}
+    auto first = &$0;
+    auto last  = &$N;
 
-part ::= TB NAME TE                         {{ 
-        $$.iterator = parse_tree.insert(parse_tree.root(), make_node(T_VAL, $1.token_value));
-        show2(parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end()); 
-    }}
+    auto it = add_node(parse_tree, parse_tree.root(), make_node(T_BLOCK, 0));
 
-part ::= LITERAL                            {{ 
-        $$.iterator = parse_tree.insert(parse_tree.root(), make_node(T_LIT, $0.token_value)); 
-        show2(parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end()); 
-    }}
+    while (first != last) {
+        auto x = parse_tree.cut(first->iterator);
+        add_node(parse_tree, it, x);
+        ++first;
+    }
+    $$.iterator = it;
 
-part ::= TB IF NAME TE template TB END TE   {{
-        auto n    = make_node(T_VAL, $2.token_value);
-        auto n_if = make_node(T_IF, 0);
-        stlplus::ntree<node> t = parse_tree.cut($4.iterator);
-        auto it = parse_tree.insert(parse_tree.root(), n_if);
-        parse_tree.insert(it, 0, n);
-        parse_tree.insert(it, 1, t);
-        $$.iterator = it;
-        show2(parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end()); 
-    }}
+    if (VERBOSE) show("template ::= part*", parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end());
+}}
 
-part ::= TB FOR NAME IN NAME TE template TB END TE  {{
-        auto x    = make_node(T_VAL, $2.token_value);
-        auto n    = make_node(T_VAL, $4.token_value);
-        auto n_for = make_node(T_FOR, 0);
-        stlplus::ntree<node> t = parse_tree.cut($6.iterator);
-        auto it = parse_tree.insert(parse_tree.root(), n_for);
-        parse_tree.insert(it, 0, x);
-        parse_tree.insert(it, 1, n);
-        parse_tree.insert(it, 2, t);
-        $$.iterator = it;
-        show2(parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end()); 
-    }}
+part ::= TB expr TE                         {{
+    stlplus::ntree<node> tree = parse_tree.cut($1.iterator);
+    $$.iterator = parse_tree.move(parse_tree.root(), tree);
+    if (VERBOSE) show("part ::= TB expr TE", parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end());
+}}
+
+part ::= LITERAL                            {{
+    $$.iterator = add_node(parse_tree, parse_tree.root(), make_node(T_LIT, $0.token_value));
+    if (VERBOSE) show("part ::= literal", parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end());
+}}
+
+part ::= TB IF expr TE template TB END TE   {{
+    stlplus::ntree<node> body = parse_tree.cut($4.iterator);
+
+    $$.iterator = add_node(parse_tree, parse_tree.root(),
+        make_node(T_IF, 0),
+        parse_tree.cut($2.iterator),
+        body
+    );
+    if (VERBOSE) show("part ::= if x template end", parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end());
+}}
+
+part ::= TB FOR expr IN expr TE template TB END TE  {{
+    stlplus::ntree<node> body = parse_tree.cut($6.iterator);
+
+    $$.iterator = add_node(parse_tree, parse_tree.root(),
+        make_node(T_FOR, 0),
+        parse_tree.cut($2.iterator),
+        parse_tree.cut($4.iterator),
+        body
+    );
+    if (VERBOSE) show("for x in n template end", parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end());
+}}
+
+expr ::= NAME               {{
+    $$.iterator = add_node(parse_tree, parse_tree.root(), make_node(T_VAL, $0.token_value));
+    if (VERBOSE) show("expr ::= NAME", parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end());
+}}
 
 %%
 
@@ -141,9 +206,21 @@ int main(int argc, char** argv) {
 
     marpa::recognizer r(g);
 
-/*
     int l = literals.add("test");
     int v = varnames.add("x");
+
+/*
+    read(r, R_TB, 1, 1);
+    read(r, R_NAME, v, 1);
+    read(r, R_TE, 1, 1);
+
+    read(r, R_TB, 1, 1);
+    read(r, R_IF, 1, 1);
+    read(r, R_NAME, v, 1);
+    read(r, R_TE, 1, 1);
+    read(r, R_TB, 1, 1);
+    read(r, R_END, 1, 1);
+    read(r, R_TE, 1, 1);
 
     read(r, R_TB, 1, 1);
     read(r, R_FOR, 1, 1);
@@ -181,7 +258,7 @@ int main(int argc, char** argv) {
 
     while (it != input.end()) {
         if (literal) {
-            auto end = read_tag(it, input.end(), 
+            auto end = read_tag(it, input.end(),
                 std::begin(tag_begin), std::end(tag_begin));
 
             if (it != end) {
@@ -196,11 +273,19 @@ int main(int argc, char** argv) {
 
             if (literal_start != literal_end) {
                 std::string literal{literal_start, literal_end};
-                //literal.erase(std::remove(std::begin(literal), std::end(literal), '\n'), std::end(literal));
-                //literal.erase(std::remove(std::begin(literal), std::end(literal), ' '), std::end(literal));
+                std::string encoded;
+
+                std::for_each(std::begin(literal), std::end(literal), [&encoded](char x) {
+                    if (x == '\n')
+                        encoded.append("\\n");
+                    else
+                        encoded.push_back(x);
+                });
+
+                literal = encoded;
+
                 if (literal.size() != 0)  {
                     int l = literals.add(literal);
-                    //std::cerr << "reading literal[" << literal << "]\n";
                     read(r, R_LITERAL, l, 1);
                 }
                 it = literal_end;
@@ -290,7 +375,11 @@ int main(int argc, char** argv) {
                 }
                 case MARPA_STEP_NULLING_SYMBOL: {
                     int res    = v.result();
-                    //stack[res] = v.token_value(); 
+                    //stack[res] = v.token_value();
+                    if (v.symbol() == R_template) {
+                        auto it = add_node(parse_tree, parse_tree.root(), make_node(T_BLOCK, 0));
+                        stack[v.result()].iterator = it;
+                    }
                     break;
                 }
                 case MARPA_STEP_INACTIVE:
@@ -298,7 +387,8 @@ int main(int argc, char** argv) {
             }
         }
         END: ;
-        show2(parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end()); 
+
+        show("end of program", parse_tree, parse_tree.prefix_begin(), parse_tree.prefix_end());
     }
 }
 

@@ -1,1 +1,7 @@
-{{for x in last}}xxx{{end}}
+{{for x in last}}
+    {{if x}}
+        {{x}}
+        y
+        {{y}}
+    {{end}}
+{{end}}
